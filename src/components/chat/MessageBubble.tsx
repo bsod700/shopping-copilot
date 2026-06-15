@@ -26,6 +26,8 @@ export function MessageBubble({
 }) {
   const isUser = message.role === "user";
   const [copied, setCopied] = useState(false);
+  const [localTimestamp] = useState(() => Date.now());
+  const displayTimestamp = timestamp ?? localTimestamp;
 
   function handleCopy() {
     const text = message.parts
@@ -192,9 +194,9 @@ export function MessageBubble({
       })}
 
       <div className="flex items-center gap-1 px-1 text-xs text-muted-foreground">
-        {timestamp && (
+        {displayTimestamp && (
           <span>
-            {new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            {new Date(displayTimestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
           </span>
         )}
         {!isUser && (

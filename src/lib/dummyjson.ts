@@ -45,6 +45,7 @@ export interface SearchProductsInput {
   category?: string;
   sortBy?: "price" | "rating" | "title";
   order?: "asc" | "desc";
+  rankBy?: "budgetBestRated";
   limit?: number;
 }
 
@@ -58,20 +59,26 @@ export async function searchProducts({
   category,
   sortBy,
   order,
+  rankBy,
   limit = 5,
 }: SearchProductsInput): Promise<SearchProductsResult> {
   const params = new URLSearchParams();
-  params.set("limit", String(limit));
+  // For ranked queries, pull the full matching pool (limit=0) so rating/price
+  // ranking considers every candidate, not just the first page.
+  params.set("limit", String(rankBy ? 0 : limit));
   params.set("select", SELECT_FIELDS);
-  if (sortBy) params.set("sortBy", sortBy);
-  if (order) params.set("order", order);
+  if (sortBy && !rankBy) params.set("sortBy", sortBy);
+  if (order && !rankBy) params.set("order", order);
 
+  // DummyJSON has no endpoint that filters by both at once, and combining them
+  // (q against /category, or vice versa) silently drops one filter and can zero
+  // out results. category is the more precise filter, so it wins if both are set.
   let url: string;
-  if (query) {
+  if (category) {
+    url = `${BASE_URL}/category/${encodeURIComponent(category)}?${params.toString()}`;
+  } else if (query) {
     params.set("q", query);
     url = `${BASE_URL}/search?${params.toString()}`;
-  } else if (category) {
-    url = `${BASE_URL}/category/${encodeURIComponent(category)}?${params.toString()}`;
   } else {
     url = `${BASE_URL}?${params.toString()}`;
   }
@@ -80,7 +87,17 @@ export async function searchProducts({
   if (error || !data) {
     return { products: [], error };
   }
-  return { products: data.products.map(normalizeProduct) };
+  const products = data.products.map(normalizeProduct);
+
+  if (rankBy === "budgetBestRated") {
+    const GOOD_RATING = 4;
+    const wellRated = products.filter((p) => p.rating >= GOOD_RATING);
+    const pool = wellRated.length > 0 ? wellRated : products;
+    pool.sort((a, b) => a.price - b.price);
+    return { products: pool.slice(0, limit) };
+  }
+
+  return { products: products.slice(0, limit) };
 }
 
 export interface GetProductResult {

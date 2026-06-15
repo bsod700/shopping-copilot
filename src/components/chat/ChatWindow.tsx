@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, lastAssistantMessageIsCompleteWithApprovalResponses } from "ai";
@@ -22,7 +22,7 @@ function ChatWindowInner({
   starterPrompts: string[];
 }) {
   const router = useRouter();
-  const { messages, status, error, sendMessage, stop, regenerate, addToolApprovalResponse } =
+  const { messages, status, error, sendMessage, stop, regenerate, clearError, addToolApprovalResponse } =
     useChat<ChatUIMessage>({
       id: conversationId,
       messages: initialMessages,
@@ -36,36 +36,37 @@ function ChatWindowInner({
         // moment to land before refreshing the sidebar's conversation list.
         setTimeout(() => router.refresh(), 1000);
       },
-    });
+  });
   const { addItem, clear } = useCart();
   const handledToolCallIds = useRef(new Set<string>());
-  const [timestamps, setTimestamps] = useState<Record<string, number>>({});
   const [stopped, setStopped] = useState(false);
-
-  useEffect(() => {
-    if (status === "submitted" || status === "streaming") {
-      setStopped(false);
-    }
-  }, [status]);
 
   function handleStop() {
     stop();
+    clearError();
     setStopped(true);
   }
 
-  useEffect(() => {
-    setTimestamps((prev) => {
-      let changed = false;
-      const next = { ...prev };
-      for (const message of messages) {
-        if (!(message.id in next)) {
-          next[message.id] = message.metadata?.createdAt ?? Date.now();
-          changed = true;
-        }
-      }
-      return changed ? next : prev;
-    });
-  }, [messages]);
+  function handleSubmit(text: string) {
+    setStopped(false);
+    clearError();
+    sendMessage({ text });
+  }
+
+  function handleRegenerate(messageId?: string) {
+    clearError();
+    regenerate(messageId ? { messageId } : undefined);
+  }
+
+  const timestamps = useMemo(
+    () =>
+      Object.fromEntries(
+        messages.flatMap((message) =>
+          message.metadata?.createdAt ? [[message.id, message.metadata.createdAt]] : [],
+        ),
+      ),
+    [messages],
+  );
 
   useEffect(() => {
     for (const message of messages) {
@@ -85,38 +86,48 @@ function ChatWindowInner({
     }
   }, [messages, addItem, clear]);
 
+  const hasMessages = messages.length > 0;
+
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col bg-background">
       <CartBar />
-      <div className="max-w-3xl mx-auto w-full h-full flex flex-col">
-        <div className="overflow-hidden">
-          <MessageList
-            messages={messages}
-            status={status}
-            stopped={stopped}
-            timestamps={timestamps}
-            onSuggestionClick={(text) => sendMessage({ text })}
-            onToolApprove={(id, approved) => addToolApprovalResponse({ id, approved })}
-            onRegenerate={(messageId) => regenerate(messageId ? { messageId } : undefined)}
-          />
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="min-h-0 flex-1">
+          {hasMessages ? (
+            <MessageList
+              messages={messages}
+              status={status}
+              stopped={stopped && status === "ready"}
+              timestamps={timestamps}
+              onSuggestionClick={handleSubmit}
+              onToolApprove={(id, approved) => addToolApprovalResponse({ id, approved })}
+              onRegenerate={handleRegenerate}
+            />
+          ) : (
+            <div className="h-full" aria-hidden="true" />
+          )}
         </div>
-        {error && (
-          <div className="flex items-center justify-between gap-2 border-t bg-destructive/10 px-4 py-2 text-sm text-destructive ">
-            <span>Something went wrong, try again.</span>
-            <Button size="sm" variant="outline" onClick={() => regenerate()}>
-              Retry
-            </Button>
+        <div className="shrink-0 border-t bg-background/95 px-4 pb-4 pt-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-6">
+          <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
+            {error && (
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                <span>Something went wrong, try again.</span>
+                <Button size="sm" variant="outline" onClick={() => handleRegenerate()}>
+                  Retry
+                </Button>
+              </div>
+            )}
+            {!hasMessages && (
+              <StarterPrompts prompts={starterPrompts} onSelect={handleSubmit} />
+            )}
+            <ChatInput
+              status={status}
+              onStop={handleStop}
+              onSubmit={handleSubmit}
+            />
           </div>
-        )}
-        {messages.length === 0 && (
-          <StarterPrompts prompts={starterPrompts} onSelect={(text) => sendMessage({ text })} />
-        )}
-        <ChatInput
-          status={status}
-          onStop={handleStop}
-          onSubmit={(text) => sendMessage({ text })}
-        />
         </div>
+      </div>
     </div>
   );
 }

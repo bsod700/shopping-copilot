@@ -29,7 +29,8 @@ export async function POST(req: Request) {
       originalMessages: messages,
       onFinish: async ({ messages: finalMessages }) => {
         try {
-          await saveMessages(conversationId, finalMessages);
+          const messagesToSave = finalMessages.filter((m) => m.id);
+          await saveMessages(conversationId, messagesToSave);
 
           const conversation = await getConversation(conversationId);
           if (conversation?.title === "New conversation") {

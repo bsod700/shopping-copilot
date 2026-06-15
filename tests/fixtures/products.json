@@ -1,0 +1,46 @@
+{
+  "products": [
+    {
+      "id": 6,
+      "title": "Huawei Matebook X Pro",
+      "description": "The Huawei Matebook X Pro is a sleek and powerful laptop, featuring a stunning display and high-performance specs for productivity on the go.",
+      "category": "laptops",
+      "price": 1399.99,
+      "discountPercentage": 10.0,
+      "rating": 4.98,
+      "tags": ["laptops"],
+      "brand": "Huawei",
+      "availabilityStatus": "In Stock",
+      "thumbnail": "https://cdn.dummyjson.com/products/images/laptops/Huawei%20Matebook%20X%20Pro/thumbnail.png"
+    },
+    {
+      "id": 1,
+      "title": "Apple MacBook Pro 14 Inch Space Grey",
+      "description": "The Apple MacBook Pro 14 Inch Space Grey is a high-performance laptop with stunning display and powerful chip.",
+      "category": "laptops",
+      "price": 1999.99,
+      "discountPercentage": 4.0,
+      "rating": 2.99,
+      "tags": ["laptops", "apple"],
+      "brand": "Apple",
+      "availabilityStatus": "Low Stock",
+      "thumbnail": "https://cdn.dummyjson.com/products/images/laptops/Apple%20MacBook%20Pro%2014%20Inch%20Space%20Grey/thumbnail.png"
+    },
+    {
+      "id": 2,
+      "title": "Lenovo ThinkPad X1 Carbon",
+      "description": "The Lenovo ThinkPad X1 Carbon is a lightweight, durable business laptop with excellent battery life.",
+      "category": "laptops",
+      "price": 1199.99,
+      "discountPercentage": 2.5,
+      "rating": 4.61,
+      "tags": ["laptops", "business"],
+      "brand": "Lenovo",
+      "availabilityStatus": "In Stock",
+      "thumbnail": "https://cdn.dummyjson.com/products/images/laptops/Lenovo%20ThinkPad%20X1%20Carbon/thumbnail.png"
+    }
+  ],
+  "total": 3,
+  "skip": 0,
+  "limit": 3
+}

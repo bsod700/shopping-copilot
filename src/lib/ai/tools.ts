@@ -24,14 +24,25 @@ async function withCache<T>(key: string, fn: () => Promise<T>): Promise<T> {
 export const searchProducts = tool({
   description:
     "Search the product catalog. Use `query` for keyword search, `category` when the user names a category " +
-    "(e.g. smartphones, skincare, furniture). Use sortBy/order='price'/'asc' for cheap/budget requests. " +
-    "Only call this for physical retail products this shop might carry. Do not call it for services, " +
-    "travel, digital goods, or anything clearly outside a product catalog.",
+    "(e.g. smartphones, skincare, furniture). Use sortBy/order='price'/'asc' and limit: 1 for 'cheapest' " +
+    "or 'lowest price' requests, unless the user asks for multiple options; use limit: 3 for cheap/budget options. " +
+    "When the user combines price AND quality (e.g. 'cheapest with good/best reviews', 'best value', " +
+    "'good rating but affordable'), set rankBy: 'budgetBestRated' instead of sortBy/order: this filters out " +
+    "poorly-rated products first, then ranks the rest by price so every result is both well-reviewed and as " +
+    "cheap as possible. Only call this for physical retail products this shop might carry. Do not call it for " +
+    "services, travel, digital goods, or anything clearly outside a product catalog.",
   inputSchema: z.object({
     query: z.string().optional().describe("Free-text search keywords"),
     category: z.string().optional().describe("Exact category slug, e.g. 'smartphones'"),
     sortBy: z.enum(["price", "rating", "title"]).optional(),
     order: z.enum(["asc", "desc"]).optional(),
+    rankBy: z
+      .enum(["budgetBestRated"])
+      .optional()
+      .describe(
+        "Use 'budgetBestRated' for combined price+quality requests: filters to well-rated products " +
+          "(rating >= 4) then sorts by price ascending. Overrides sortBy/order when set.",
+      ),
     limit: z.number().min(1).max(10).default(5),
   }),
   execute: async (input) => withCache(`search:${JSON.stringify(input)}`, () => dummyjsonSearch(input)),

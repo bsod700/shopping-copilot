@@ -10,12 +10,12 @@ export function StarterPrompts({
   onSelect: (text: string) => void;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-2 p-4">
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
       {prompts.map((prompt) => (
         <Button
           key={prompt}
           variant="outline"
-          className="h-auto justify-start whitespace-normal text-left text-sm"
+          className="h-auto min-h-9 justify-start whitespace-normal rounded-full px-4 py-2 text-left text-sm leading-snug"
           onClick={() => onSelect(prompt)}
         >
           {prompt}

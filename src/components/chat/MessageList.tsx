@@ -25,6 +25,7 @@ export function MessageList({
 }) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const didInitialScrollRef = useRef(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
 
   useEffect(() => {
@@ -32,7 +33,8 @@ export function MessageList({
     if (!viewport) return;
     const isNearBottom =
       viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 100;
-    if (isNearBottom) {
+    if (!didInitialScrollRef.current || isNearBottom) {
+      didInitialScrollRef.current = true;
       bottomRef.current?.scrollIntoView({ block: "end" });
     }
   }, [messages, status]);
@@ -61,18 +63,18 @@ export function MessageList({
   const isStreaming = status === "streaming" || status === "submitted";
 
   return (
-    <div className="relative h-full">
+    <div className="relative h-full min-h-0">
       <ScrollArea className="h-full" role="log" aria-live="polite">
         <div
           ref={(el) => {
             // ScrollArea renders a single viewport child; grab it for scroll tracking.
             viewportRef.current = el?.closest('[data-slot="scroll-area-viewport"]') ?? null;
           }}
-          className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-4"
+          className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6 sm:px-6"
         >
           {messages.map((message, i) => (
             <MessageBubble
-              key={message.id}
+              key={message.id || i}
               message={message}
               timestamp={timestamps?.[message.id]}
               streaming={isStreaming && i === messages.length - 1}
