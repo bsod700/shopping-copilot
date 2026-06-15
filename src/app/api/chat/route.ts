@@ -1,5 +1,5 @@
 import { openai } from "@ai-sdk/openai";
-import { convertToModelMessages, generateText, streamText, stepCountIs } from "ai";
+import { convertToModelMessages, generateId, generateText, streamText, stepCountIs } from "ai";
 import {
   searchProducts,
   getProduct,
@@ -27,6 +27,7 @@ export async function POST(req: Request) {
 
     return result.toUIMessageStreamResponse<ChatUIMessage>({
       originalMessages: messages,
+      generateMessageId: generateId,
       onFinish: async ({ messages: finalMessages }) => {
         try {
           const messagesToSave = finalMessages.filter((m) => m.id);
