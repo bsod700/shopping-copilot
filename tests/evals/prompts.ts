@@ -226,6 +226,80 @@ export const evalCases: EvalCase[] = [
   },
 
   {
+    id: "womens-dresses-no-off-type",
+    description: "'What women's dresses do you have?' lists only genuine dresses, not corsets/suits from the same category",
+    turns: ["What women's dresses do you have?"],
+    check: (ctx) => {
+      const calls = ctx.toolCalls.filter((c) => c.toolName === "searchProducts");
+      if (calls.length === 0) return fail("expected searchProducts to be called");
+      const products = groundedProducts(ctx);
+      if (products.length === 0) return fail("expected at least one product in tool results");
+
+      const offType = products.filter((p) => /suit|corset/i.test(p.title));
+      for (const p of offType) {
+        if (ctx.text.includes(p.title)) {
+          return fail(`off-type item "${p.title}" should not be listed as a women's dress option`);
+        }
+      }
+      return pass();
+    },
+  },
+
+  {
+    id: "color-modifier-dress",
+    description: "'<color> dresses' searches by product type, doesn't show off-type items (suits/corsets), and is upfront if no red dress exists",
+    turns: ["show me all the red dresses"],
+    check: (ctx) => {
+      const calls = ctx.toolCalls.filter((c) => c.toolName === "searchProducts");
+      if (calls.length === 0) return fail("expected searchProducts to be called");
+      const products = groundedProducts(ctx);
+      if (products.length === 0) return fail("expected at least one product in tool results");
+
+      // The catalog has no actual "red dress", so the reply should say so plainly.
+      if (!/(no|couldn.t find|don.t have|none).*red dress|red dress.*(no|n.t|none)/i.test(ctx.text)) {
+        return fail(`expected the reply to plainly say no red dress was found, got: ${ctx.text.slice(0, 300)}`);
+      }
+
+      // Off-type items (suits, corsets) shouldn't be presented as dress alternatives
+      // without being clearly qualified as not actually a dress.
+      const offType = products.filter((p) => /suit|corset/i.test(p.title));
+      for (const p of offType) {
+        if (ctx.text.includes(p.title) && !/not a dress|isn.t a dress|not.*dress/i.test(ctx.text)) {
+          return fail(`off-type item "${p.title}" mentioned without clarifying it isn't a dress`);
+        }
+      }
+      return pass();
+    },
+  },
+
+  {
+    id: "show-more-beauty",
+    description: "'Show more beauty products' returns different products than the first search, not a repeat",
+    turns: ["what powder makeup do you have with a smooth finish?", "show more beauty products"],
+    check: (ctx) => {
+      const calls = ctx.toolCalls.filter((c) => c.toolName === "searchProducts");
+      if (calls.length < 2) return fail(`expected a second searchProducts call for "show more", got ${calls.length}`);
+
+      const firstProducts = new Set(
+        (
+          (ctx.toolResults.filter((r) => r.toolName === "searchProducts")[0]?.output as { products?: { id: number }[] })
+            ?.products ?? []
+        ).map((p) => p.id),
+      );
+      const secondProducts =
+        (ctx.toolResults.filter((r) => r.toolName === "searchProducts")[1]?.output as { products?: { id: number }[] })
+          ?.products ?? [];
+      if (secondProducts.length === 0) return fail("expected the second searchProducts call to return products");
+
+      const allRepeats = secondProducts.every((p) => firstProducts.has(p.id));
+      if (allRepeats) {
+        return fail("second search returned only products already shown in the first search");
+      }
+      return pass();
+    },
+  },
+
+  {
     id: "follow-up-suggestions",
     description: "Final reply includes follow-up suggestions",
     turns: ["show me some sports accessories"],

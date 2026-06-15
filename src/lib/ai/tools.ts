@@ -4,6 +4,8 @@ import {
   searchProducts as dummyjsonSearch,
   getProduct as dummyjsonGetProduct,
   listCategories as dummyjsonListCategories,
+  type SearchProductsInput,
+  type SearchProductsResult,
 } from "@/lib/dummyjson";
 
 // Tiny in-memory cache for tool results within a session (TTL 5 min).
@@ -21,32 +23,82 @@ async function withCache<T>(key: string, fn: () => Promise<T>): Promise<T> {
   return result;
 }
 
-export const searchProducts = tool({
-  description:
-    "Search the product catalog. Use `query` for keyword search, `category` when the user names a category " +
-    "(e.g. smartphones, skincare, furniture). Use sortBy/order='price'/'asc' and limit: 1 for 'cheapest' " +
-    "or 'lowest price' requests, unless the user asks for multiple options; use limit: 3 for cheap/budget options. " +
-    "When the user combines price AND quality (e.g. 'cheapest with good/best reviews', 'best value', " +
-    "'good rating but affordable'), set rankBy: 'budgetBestRated' instead of sortBy/order: this filters out " +
-    "poorly-rated products first, then ranks the rest by price so every result is both well-reviewed and as " +
-    "cheap as possible. Only call this for physical retail products this shop might carry. Do not call it for " +
-    "services, travel, digital goods, or anything clearly outside a product catalog.",
-  inputSchema: z.object({
-    query: z.string().optional().describe("Free-text search keywords"),
-    category: z.string().optional().describe("Exact category slug, e.g. 'smartphones'"),
-    sortBy: z.enum(["price", "rating", "title"]).optional(),
-    order: z.enum(["asc", "desc"]).optional(),
-    rankBy: z
-      .enum(["budgetBestRated"])
-      .optional()
-      .describe(
-        "Use 'budgetBestRated' for combined price+quality requests: filters to well-rated products " +
-          "(rating >= 4) then sorts by price ascending. Overrides sortBy/order when set.",
-      ),
-    limit: z.number().min(1).max(10).default(5),
-  }),
-  execute: async (input) => withCache(`search:${JSON.stringify(input)}`, () => dummyjsonSearch(input)),
-});
+// Tracks product ids already returned for a given category/query within each
+// conversation, so a "show more" follow-up that would otherwise re-run with
+// the same params (and the same rankBy/limit narrowing) gets broadened to
+// surface fresh products instead of repeating the same handful, regardless of
+// category. Keyed by conversationId so unrelated conversations don't leak
+// "already shown" state into each other.
+const shownIdsByConversation = new Map<string, Map<string, Set<number>>>();
+
+function shownKey(input: SearchProductsInput): string {
+  return input.category ?? input.query ?? "__all__";
+}
+
+export function createSearchProductsTool(conversationId: string) {
+  return tool({
+    description:
+      "Search the product catalog. Use `query` for keyword search, `category` when the user names a category " +
+      "(e.g. smartphones, skincare, furniture). Use sortBy/order='price'/'asc' and limit: 1 for 'cheapest' " +
+      "or 'lowest price' requests, unless the user asks for multiple options; use limit: 3 for cheap/budget options. " +
+      "When the user combines price AND quality (e.g. 'cheapest with good/best reviews', 'best value', " +
+      "'good rating but affordable'), set rankBy: 'budgetBestRated' instead of sortBy/order: this filters out " +
+      "poorly-rated products first, then ranks the rest by price so every result is both well-reviewed and as " +
+      "cheap as possible. Only call this for physical retail products this shop might carry. Do not call it for " +
+      "services, travel, digital goods, or anything clearly outside a product catalog.",
+    inputSchema: z.object({
+      query: z.string().optional().describe("Free-text search keywords"),
+      category: z.string().optional().describe("Exact category slug, e.g. 'smartphones'"),
+      sortBy: z.enum(["price", "rating", "title"]).optional(),
+      order: z.enum(["asc", "desc"]).optional(),
+      rankBy: z
+        .enum(["budgetBestRated"])
+        .optional()
+        .describe(
+          "Use 'budgetBestRated' for combined price+quality requests: filters to well-rated products " +
+            "(rating >= 4) then sorts by price ascending. Overrides sortBy/order when set.",
+        ),
+      limit: z.number().min(1).max(10).default(5),
+    }),
+    execute: async (input) => {
+      let shownIdsByKey = shownIdsByConversation.get(conversationId);
+      if (!shownIdsByKey) {
+        shownIdsByKey = new Map();
+        shownIdsByConversation.set(conversationId, shownIdsByKey);
+      }
+      const key = shownKey(input);
+      const seen = shownIdsByKey.get(key);
+
+      let result = await withCache(`search:${JSON.stringify(input)}`, () => dummyjsonSearch(input));
+
+      // If this returned nothing, or everything it returned was already shown
+      // earlier in this conversation, re-fetch a broader pool (no rankBy
+      // narrowing, no query restriction beyond category, more results) and
+      // filter out the ids the user has already seen.
+      const allRepeats =
+        seen && seen.size > 0 && result.products.length > 0 && result.products.every((p) => seen.has(p.id));
+      if (input.category && (result.products.length === 0 || allRepeats)) {
+        const broaderInput: SearchProductsInput = { ...input, query: undefined, rankBy: undefined, limit: 20 };
+        const broader = await withCache(`search:broad:${JSON.stringify(broaderInput)}`, () =>
+          dummyjsonSearch(broaderInput),
+        );
+        const fresh = seen ? broader.products.filter((p) => !seen.has(p.id)) : broader.products;
+        if (fresh.length > 0) {
+          result = { ...broader, products: fresh.slice(0, input.limit ?? 5) } satisfies SearchProductsResult;
+        }
+      }
+
+      let ids = shownIdsByKey.get(key);
+      if (!ids) {
+        ids = new Set();
+        shownIdsByKey.set(key, ids);
+      }
+      for (const p of result.products) ids.add(p.id);
+
+      return result;
+    },
+  });
+}
 
 export const getProduct = tool({
   description:

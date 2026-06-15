@@ -62,17 +62,22 @@ export async function searchProducts({
   rankBy,
   limit = 5,
 }: SearchProductsInput): Promise<SearchProductsResult> {
+  // Both a category and a query narrowing the same call: filter the category's
+  // products by query afterwards (see below), so pull the full category pool here.
+  const bothSet = Boolean(category && query);
+
   const params = new URLSearchParams();
-  // For ranked queries, pull the full matching pool (limit=0) so rating/price
-  // ranking considers every candidate, not just the first page.
-  params.set("limit", String(rankBy ? 0 : limit));
+  // For ranked queries (or when filtering a category pool by query), pull the
+  // full matching pool (limit=0) so filtering/ranking considers every candidate.
+  params.set("limit", String(rankBy || bothSet ? 0 : limit));
   params.set("select", SELECT_FIELDS);
   if (sortBy && !rankBy) params.set("sortBy", sortBy);
   if (order && !rankBy) params.set("order", order);
 
   // DummyJSON has no endpoint that filters by both at once, and combining them
   // (q against /category, or vice versa) silently drops one filter and can zero
-  // out results. category is the more precise filter, so it wins if both are set.
+  // out results. category is the more precise filter, so it wins if both are set;
+  // the query is applied as a post-fetch title/tag filter below instead.
   let url: string;
   if (category) {
     url = `${BASE_URL}/category/${encodeURIComponent(category)}?${params.toString()}`;
@@ -87,7 +92,14 @@ export async function searchProducts({
   if (error || !data) {
     return { products: [], error };
   }
-  const products = data.products.map(normalizeProduct);
+  let products = data.products.map(normalizeProduct);
+
+  if (bothSet) {
+    const q = query!.toLowerCase();
+    products = products.filter(
+      (p) => p.title.toLowerCase().includes(q) || p.tags.some((t) => t.toLowerCase().includes(q)),
+    );
+  }
 
   if (rankBy === "budgetBestRated") {
     const GOOD_RATING = 4;

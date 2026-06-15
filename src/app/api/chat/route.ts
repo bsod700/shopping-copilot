@@ -1,7 +1,7 @@
 import { openai } from "@ai-sdk/openai";
 import { convertToModelMessages, generateId, generateText, streamText, stepCountIs } from "ai";
 import {
-  searchProducts,
+  createSearchProductsTool,
   getProduct,
   listCategories,
   suggestFollowUps,
@@ -21,7 +21,14 @@ export async function POST(req: Request) {
       model: openai("gpt-5.4-mini"),
       system: SYSTEM_PROMPT,
       messages: await convertToModelMessages(messages),
-      tools: { searchProducts, getProduct, listCategories, suggestFollowUps, addToCart, checkout },
+      tools: {
+        searchProducts: createSearchProductsTool(conversationId),
+        getProduct,
+        listCategories,
+        suggestFollowUps,
+        addToCart,
+        checkout,
+      },
       stopWhen: stepCountIs(5),
     });
 

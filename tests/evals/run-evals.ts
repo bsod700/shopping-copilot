@@ -1,7 +1,7 @@
 import { openai } from "@ai-sdk/openai";
 import { streamText, stepCountIs, type ModelMessage } from "ai";
 import {
-  searchProducts,
+  createSearchProductsTool,
   getProduct,
   listCategories,
   suggestFollowUps,
@@ -11,9 +11,15 @@ import {
 import { SYSTEM_PROMPT } from "@/lib/ai/systemPrompt";
 import { evalCases, type EvalContext } from "./prompts";
 
-const tools = { searchProducts, getProduct, listCategories, suggestFollowUps, addToCart, checkout };
-
-async function runCase(turns: string[]): Promise<EvalContext> {
+async function runCase(turns: string[], conversationId: string): Promise<EvalContext> {
+  const tools = {
+    searchProducts: createSearchProductsTool(conversationId),
+    getProduct,
+    listCategories,
+    suggestFollowUps,
+    addToCart,
+    checkout,
+  };
   let messages: ModelMessage[] = [];
   let toolCalls: EvalContext["toolCalls"] = [];
   let toolResults: EvalContext["toolResults"] = [];
@@ -62,7 +68,7 @@ async function main() {
   for (const evalCase of cases) {
     process.stdout.write(`${evalCase.id} ... `);
     try {
-      const ctx = await runCase(evalCase.turns);
+      const ctx = await runCase(evalCase.turns, `eval-${evalCase.id}`);
       const result = evalCase.check(ctx);
       if (result.pass) {
         console.log("PASS");
