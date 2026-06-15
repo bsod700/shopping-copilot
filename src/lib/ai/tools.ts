@@ -49,6 +49,46 @@ export const getProduct = tool({
   execute: async ({ id }) => withCache(`product:${id}`, () => dummyjsonGetProduct(id)),
 });
 
+export const suggestFollowUps = tool({
+  description:
+    "Call this LAST, after your text reply, to offer the user 2-4 short follow-up actions they can " +
+    "tap instead of typing. Phrase each suggestion as something the USER would say (first person / " +
+    "imperative), e.g. 'Sort by lowest price' or 'Show details for Chanel Coco Noir'.",
+  inputSchema: z.object({
+    suggestions: z.array(z.string()).min(2).max(4),
+  }),
+  execute: async ({ suggestions }) => ({ suggestions }),
+});
+
+export const addToCart = tool({
+  description:
+    "Add a product to the user's cart. Only call this after the user has clearly asked to add/buy a " +
+    "specific product they've already seen (from searchProducts or getProduct). The user will be shown " +
+    "an approve/deny confirmation before it's added, so you don't need to ask for confirmation yourself " +
+    "in your text reply, just call the tool.",
+  inputSchema: z.object({
+    productId: z.number().describe("The product id"),
+    title: z.string().describe("The product title, for display in the confirmation"),
+    price: z.number().describe("The product price, for display in the confirmation"),
+    quantity: z.number().min(1).max(10).default(1),
+  }),
+  needsApproval: true,
+  execute: async (input) => ({ added: true, ...input }),
+});
+
+export const checkout = tool({
+  description:
+    "Place a demo order for everything currently in the user's cart. Only call this when the user " +
+    "explicitly asks to checkout/buy/place the order. The user will be shown an approve/deny confirmation " +
+    "first. This is a demo, it does not charge any real payment.",
+  inputSchema: z.object({}),
+  needsApproval: true,
+  execute: async () => ({
+    orderId: `DEMO-${Math.floor(100000 + Math.random() * 900000)}`,
+    placedAt: new Date().toISOString(),
+  }),
+});
+
 export const listCategories = tool({
   description:
     "List all product category slugs this shop carries. Use this when the user asks what categories/types " +

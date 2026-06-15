@@ -9,6 +9,7 @@ export interface Product {
   thumbnail: string;
   availabilityStatus: string;
   brand?: string;
+  tags: string[];
 }
 
 export interface ProductDetail extends Product {

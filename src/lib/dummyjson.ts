@@ -2,7 +2,7 @@ import type { Product, ProductDetail } from "./types";
 
 const BASE_URL = "https://dummyjson.com/products";
 const SELECT_FIELDS =
-  "id,title,description,price,thumbnail,category,rating,discountPercentage,availabilityStatus,brand";
+  "id,title,description,price,thumbnail,category,rating,discountPercentage,availabilityStatus,brand,tags";
 
 // Wrap fetch with a timeout + try/catch so callers always get a result object,
 // never a thrown error (the model should relay "search failed" honestly).
@@ -36,6 +36,7 @@ function normalizeProduct(raw: Record<string, unknown>): Product {
     thumbnail: raw.thumbnail as string,
     availabilityStatus: (raw.availabilityStatus as string) ?? "Unknown",
     brand: raw.brand as string | undefined,
+    tags: (raw.tags as string[]) ?? [],
   };
 }
 
