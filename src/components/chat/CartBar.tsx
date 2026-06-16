@@ -95,7 +95,7 @@ export function CartBar() {
           render={<Button variant="outline" size="icon" className="relative" aria-label="Open cart" />}
         >
           <ShoppingCart className="h-4 w-4" />
-          <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs font-medium text-primary-foreground">
+          <span aria-hidden="true" className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs font-medium text-primary-foreground">
             {count}
           </span>
         </SheetTrigger>
