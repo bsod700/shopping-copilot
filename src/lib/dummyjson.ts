@@ -47,6 +47,8 @@ export interface SearchProductsInput {
   order?: "asc" | "desc";
   rankBy?: "budgetBestRated";
   limit?: number;
+  minRating?: number;
+  inStock?: boolean;
 }
 
 export interface SearchProductsResult {
@@ -61,15 +63,18 @@ export async function searchProducts({
   order,
   rankBy,
   limit = 5,
+  minRating,
+  inStock,
 }: SearchProductsInput): Promise<SearchProductsResult> {
   // Both a category and a query narrowing the same call: filter the category's
   // products by query afterwards (see below), so pull the full category pool here.
   const bothSet = Boolean(category && query);
 
   const params = new URLSearchParams();
-  // For ranked queries (or when filtering a category pool by query), pull the
-  // full matching pool (limit=0) so filtering/ranking considers every candidate.
-  params.set("limit", String(rankBy || bothSet ? 0 : limit));
+  // Pull the full pool whenever we need to rank, sort, or filter a category by
+  // query — so the sort/rank/filter operates on every candidate, not just the
+  // first N that happen to come back first.
+  params.set("limit", String(rankBy || bothSet || sortBy ? 0 : limit));
   params.set("select", SELECT_FIELDS);
   if (sortBy && !rankBy) params.set("sortBy", sortBy);
   if (order && !rankBy) params.set("order", order);
@@ -101,12 +106,33 @@ export async function searchProducts({
     );
   }
 
+  // Apply explicit filters before ranking/sorting
+  if (inStock) {
+    products = products.filter((p) => p.availabilityStatus !== "Out of Stock");
+  }
+  if (minRating != null) {
+    products = products.filter((p) => p.rating >= minRating);
+  }
+
   if (rankBy === "budgetBestRated") {
-    const GOOD_RATING = 4;
+    const GOOD_RATING = minRating ?? 4;
     const wellRated = products.filter((p) => p.rating >= GOOD_RATING);
     const pool = wellRated.length > 0 ? wellRated : products;
     pool.sort((a, b) => a.price - b.price);
     return { products: pool.slice(0, limit) };
+  }
+
+  // Client-side sort guarantee — API sort isn't always reliable for category
+  // endpoints, so we always sort ourselves after fetching the full pool above.
+  if (sortBy) {
+    const dir = order === "asc" ? 1 : -1;
+    products.sort((a, b) => {
+      const av = a[sortBy as keyof Product];
+      const bv = b[sortBy as keyof Product];
+      if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
+      if (typeof av === "string" && typeof bv === "string") return av.localeCompare(bv) * dir;
+      return 0;
+    });
   }
 
   return { products: products.slice(0, limit) };

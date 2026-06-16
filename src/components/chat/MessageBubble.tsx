@@ -43,12 +43,18 @@ export function MessageBubble({
   return (
     <div
       className={cn(
-        "flex flex-col gap-2",
+        "flex flex-col gap-3",
         isUser ? "items-end" : "items-start",
       )}
     >
       <ThinkingSteps parts={message.parts} streaming={!!streaming} />
-      {message.parts.map((part, i) => {
+      {message.parts.filter((part, i, arr) => {
+        // Drop duplicate adjacent text parts (AI SDK can emit the same text
+        // in a new step after a tool call, producing a visual double-render).
+        if (part.type !== "text") return true;
+        const prev = arr.slice(0, i).findLast((p) => p.type === "text");
+        return !prev || prev.text !== part.text;
+      }).map((part, i) => {
         switch (part.type) {
           // Rendered last, after the loop, regardless of generation order.
           case "tool-suggestFollowUps":
@@ -59,10 +65,10 @@ export function MessageBubble({
               <div
                 key={i}
                 className={cn(
-                  "max-w-2xl rounded-lg px-3 py-2 text-sm",
+                  "max-w-2xl text-base leading-relaxed",
                   isUser
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted prose prose-sm dark:prose-invert",
+                    ? "rounded-2xl bg-[#111111] px-4 py-2.5 font-medium text-white dark:bg-white dark:text-[#111111]"
+                    : "prose dark:prose-invert",
                 )}
               >
                 <ReactMarkdown>{part.text}</ReactMarkdown>
@@ -74,9 +80,10 @@ export function MessageBubble({
               return <ProductResults key={i} products={part.output.products} />;
             }
             return (
-              <div key={i} className="flex flex-wrap gap-3">
+              <div key={i} className="flex gap-4 overflow-hidden max-w-[991px]">
+                <div className="w-2 shrink-0" />
                 {Array.from({ length: 3 }).map((_, j) => (
-                  <Skeleton key={j} className="h-64 w-[220px]" />
+                  <Skeleton key={j} className="h-[280px] w-[200px] shrink-0" />
                 ))}
               </div>
             );

@@ -38,29 +38,40 @@ function shownKey(input: SearchProductsInput): string {
 export function createSearchProductsTool(conversationId: string) {
   return tool({
     description:
-      "Search the product catalog. Use `query` for keyword search, `category` when the user names a category " +
-      "(e.g. smartphones, skincare, furniture). Use sortBy/order='price'/'asc' and limit: 1 for 'cheapest' " +
-      "or 'lowest price' requests, unless the user asks for multiple options; use limit: 3 for cheap/budget options. " +
-      "When the user combines price AND quality (e.g. 'cheapest with good/best reviews', 'best value', " +
-      "'good rating but affordable'), set rankBy: 'budgetBestRated' instead of sortBy/order: this filters out " +
-      "poorly-rated products first, then ranks the rest by price so every result is both well-reviewed and as " +
-      "cheap as possible. Only call this for physical retail products this shop might carry. Do not call it for " +
-      "services, travel, digital goods, or anything clearly outside a product catalog.",
+      "Search the product catalog. Choose params based on the user's intent:\n\n" +
+      "INTENT → PARAMS TO SET:\n" +
+      "• 'show all X' / 'list all X' → category (or query), limit:20, nothing else\n" +
+      "• 'cheapest X' / 'lowest price' → sortBy:'price', order:'asc', limit:1\n" +
+      "• 'cheap options' / 'budget X' → sortBy:'price', order:'asc', limit:3\n" +
+      "• 'best rated' / 'top rated' → sortBy:'rating', order:'desc', limit:5\n" +
+      "• 'best value' / 'cheapest good X' / price+quality → rankBy:'budgetBestRated'\n" +
+      "• 'in stock only' / 'available' → inStock:true\n" +
+      "• 'good quality' / 'well reviewed' / 'rating above N' → minRating:4 (or N)\n\n" +
+      "HARD RULES:\n" +
+      "• Never set both query AND category — category wins, query is silently ignored by the API\n" +
+      "• 'show all' / 'show me all' / 'list all' means limit:20 and NOTHING ELSE — no rankBy, no minRating, no inStock, no sortBy. Zero filters.\n" +
+      "• Only call for physical retail products. Not for services, travel, or digital goods.",
     inputSchema: z.object({
-      query: z.string().optional().describe("Free-text search keywords"),
-      category: z.string().optional().describe("Exact category slug, e.g. 'smartphones'"),
-      sortBy: z.enum(["price", "rating", "title"]).optional(),
-      order: z.enum(["asc", "desc"]).optional(),
+      query: z.string().optional().describe("Free-text keyword search — only for terms that don't map to a whole category"),
+      category: z.string().optional().describe("Exact category slug, e.g. 'smartphones', 'womens-dresses'"),
+      sortBy: z.enum(["price", "rating", "title"]).optional().describe("Sort field — omit when using rankBy"),
+      order: z.enum(["asc", "desc"]).optional().describe("Sort direction — omit when using rankBy"),
       rankBy: z
         .enum(["budgetBestRated"])
         .optional()
-        .describe(
-          "Use 'budgetBestRated' for combined price+quality requests: filters to well-rated products " +
-            "(rating >= 4) then sorts by price ascending. Overrides sortBy/order when set.",
-        ),
-      limit: z.number().min(1).max(10).default(5),
+        .describe("'budgetBestRated': filters to well-rated products (rating >= 4) then sorts cheapest first. Use for price+quality requests. Overrides sortBy/order."),
+      limit: z.number().min(1).max(20).default(5).describe("Max results. Use 20 for 'show all', 1 for single cheapest/best, 3-5 for browsing"),
+      minRating: z.number().min(1).max(5).optional().describe("Only return products with rating >= this value, e.g. 4 for 'good quality'"),
+      inStock: z.boolean().optional().describe("If true, exclude out-of-stock products"),
     }),
-    execute: async (input) => {
+    execute: async (rawInput) => {
+      // Framework-level enforcement: "show all" requests (limit=20) must never
+      // have filters that can zero out results — strip them unconditionally.
+      const input =
+        rawInput.limit === 20
+          ? { ...rawInput, rankBy: undefined, minRating: undefined, inStock: undefined, sortBy: undefined, order: undefined }
+          : rawInput;
+
       let shownIdsByKey = shownIdsByConversation.get(conversationId);
       if (!shownIdsByKey) {
         shownIdsByKey = new Map();
@@ -71,14 +82,21 @@ export function createSearchProductsTool(conversationId: string) {
 
       let result = await withCache(`search:${JSON.stringify(input)}`, () => dummyjsonSearch(input));
 
-      // If this returned nothing, or everything it returned was already shown
-      // earlier in this conversation, re-fetch a broader pool (no rankBy
-      // narrowing, no query restriction beyond category, more results) and
-      // filter out the ids the user has already seen.
+      // If this returned nothing, or everything it returned was already shown,
+      // re-fetch a broader pool (no rankBy/query narrowing) and filter out seen ids.
+      // Skip this for explicit sort/rank requests — the user wants the same products
+      // in a different order, not "fresh" ones they haven't seen yet.
+      const isSortOrRank = Boolean(input.sortBy || input.order || input.rankBy);
       const allRepeats =
+        !isSortOrRank &&
         seen && seen.size > 0 && result.products.length > 0 && result.products.every((p) => seen.has(p.id));
       if (input.category && (result.products.length === 0 || allRepeats)) {
-        const broaderInput: SearchProductsInput = { ...input, query: undefined, rankBy: undefined, limit: 20 };
+        const broaderInput: SearchProductsInput = {
+          ...input,
+          query: undefined,
+          rankBy: undefined,
+          limit: 20,
+        };
         const broader = await withCache(`search:broad:${JSON.stringify(broaderInput)}`, () =>
           dummyjsonSearch(broaderInput),
         );

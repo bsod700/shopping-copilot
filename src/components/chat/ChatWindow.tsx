@@ -104,11 +104,17 @@ function ChatWindowInner({
               onRegenerate={handleRegenerate}
             />
           ) : (
-            <div className="h-full" aria-hidden="true" />
+            <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+              <div className="text-5xl">🛍️</div>
+              <h2 className="text-2xl font-semibold tracking-tight">Hey, I&apos;m your shopping assistant!</h2>
+              <p className="max-w-sm text-muted-foreground">
+                Tell me what you&apos;re looking for — a gift 🎁, something for yourself, or just browsing — and I&apos;ll find the best options for you ✨
+              </p>
+            </div>
           )}
         </div>
         <div className="shrink-0 border-t bg-background/95 px-4 pb-4 pt-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-6">
-          <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
+          <div className="mx-auto flex w-full max-w-[991px] flex-col gap-3">
             {error && (
               <div className="flex items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 <span>Something went wrong, try again.</span>
@@ -118,7 +124,9 @@ function ChatWindowInner({
               </div>
             )}
             {!hasMessages && (
-              <StarterPrompts prompts={starterPrompts} onSelect={handleSubmit} />
+              <>
+                <StarterPrompts prompts={starterPrompts} onSelect={handleSubmit} />
+              </>
             )}
             <ChatInput
               status={status}

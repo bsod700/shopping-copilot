@@ -70,7 +70,7 @@ export function MessageList({
             // ScrollArea renders a single viewport child; grab it for scroll tracking.
             viewportRef.current = el?.closest('[data-slot="scroll-area-viewport"]') ?? null;
           }}
-          className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6 sm:px-6"
+          className="mx-auto flex w-full max-w-[991px] flex-col gap-4 px-4 py-6 sm:px-6"
         >
           {messages.map((message, i) => (
             <MessageBubble

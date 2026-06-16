@@ -49,6 +49,7 @@
 }
 
 :root {
+  --font-sans: var(--font-inter);
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -127,4 +128,41 @@
   html {
     @apply font-sans;
   }
+  button:not(:disabled), [role="button"]:not(:disabled) {
+    cursor: pointer !important;
+  }
+}
+
+/* Sidebar scrollbar — hidden until hover */
+.sidebar-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+.sidebar-group:hover .sidebar-scroll::-webkit-scrollbar-thumb {
+  background: oklch(0.708 0 0);
+}
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.sidebar-group:hover .sidebar-scroll {
+  scrollbar-color: oklch(0.708 0 0) transparent;
+}
+
+@keyframes badge-pop {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.65); }
+  65%  { transform: scale(0.85); }
+  100% { transform: scale(1); }
+}
+
+.badge-pop {
+  animation: badge-pop 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
 }

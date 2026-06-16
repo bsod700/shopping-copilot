@@ -46,7 +46,10 @@ export function ConversationListItem({
       )}
       data-testid="conversation-item"
     >
-      <Link href={`/chat/${conversation.id}`} className="flex-1 truncate">
+      <Link
+        href={`/chat/${conversation.id}`}
+        className="flex-1 truncate rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
         {conversation.title}
       </Link>
       <AlertDialog open={open} onOpenChange={setOpen}>
@@ -55,7 +58,7 @@ export function ConversationListItem({
             <Button
               variant="ghost"
               size="icon"
-              className="size-6 opacity-0 group-hover:opacity-100"
+              className="size-6 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
               aria-label="Delete conversation"
             >
               <Trash2 className="size-3.5" />

@@ -18,6 +18,7 @@ export function ChatInput({
   const [text, setText] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isStreaming = status === "streaming" || status === "submitted";
+  const wasStreaming = useRef(false);
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -25,6 +26,17 @@ export function ChatInput({
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
   }, [text]);
+
+  // Auto-focus on mount.
+  useEffect(() => { textareaRef.current?.focus(); }, []);
+
+  // Return focus to textarea when streaming finishes.
+  useEffect(() => {
+    if (wasStreaming.current && !isStreaming) {
+      textareaRef.current?.focus();
+    }
+    wasStreaming.current = isStreaming;
+  }, [isStreaming]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -41,6 +53,10 @@ export function ChatInput({
   }
 
   return (
+    <>
+      <span role="status" aria-live="polite" className="sr-only">
+        {isStreaming ? "Assistant is responding…" : ""}
+      </span>
     <form
       onSubmit={handleSubmit}
       className="flex w-full items-end gap-2 rounded-2xl border bg-background p-2 shadow-sm"
@@ -79,5 +95,6 @@ export function ChatInput({
         </Button>
       )}
     </form>
+    </>
   );
 }

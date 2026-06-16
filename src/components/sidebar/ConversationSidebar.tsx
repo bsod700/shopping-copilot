@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { Menu, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Sheet,
   SheetContent,
@@ -29,8 +28,8 @@ function SidebarContent({
   onNewConversation: () => void;
 }) {
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 p-3">
+    <div className="sidebar-group flex h-full flex-col overflow-hidden">
+      <div className="flex shrink-0 items-center gap-2 p-3">
         <Button
           className="flex-1 justify-start gap-2"
           variant="outline"
@@ -42,7 +41,7 @@ function SidebarContent({
         </Button>
         <ThemeToggle />
       </div>
-      <ScrollArea className="flex-1">
+      <div className="sidebar-scroll min-h-0 flex-1 overflow-y-auto">
         <div className="flex flex-col gap-1 p-2">
           {conversations.map((conversation) => (
             <ConversationListItem
@@ -52,7 +51,7 @@ function SidebarContent({
             />
           ))}
         </div>
-      </ScrollArea>
+      </div>
     </div>
   );
 }
@@ -74,7 +73,7 @@ export function ConversationSidebar({
 
   return (
     <>
-      <aside className="hidden w-64 shrink-0 border-r bg-muted/30 sm:block">
+      <aside className="hidden h-full w-64 shrink-0 border-r bg-muted/30 min-[1300px]:block">
         <SidebarContent
           conversations={conversations}
           activeId={activeId}
@@ -88,7 +87,7 @@ export function ConversationSidebar({
             <Button
               variant="ghost"
               size="icon"
-              className="absolute top-2 left-2 z-10 sm:hidden"
+              className="absolute top-2 left-2 z-10 min-[1300px]:hidden"
               aria-label="Open conversations"
             >
               <Menu className="size-4" />

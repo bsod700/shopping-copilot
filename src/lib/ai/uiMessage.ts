@@ -1,6 +1,6 @@
 import type { UIMessage, InferUITools } from "ai";
 import type {
-  searchProducts,
+  createSearchProductsTool,
   getProduct,
   listCategories,
   suggestFollowUps,
@@ -9,7 +9,7 @@ import type {
 } from "./tools";
 
 type ChatTools = InferUITools<{
-  searchProducts: typeof searchProducts;
+  searchProducts: ReturnType<typeof createSearchProductsTool>;
   getProduct: typeof getProduct;
   listCategories: typeof listCategories;
   suggestFollowUps: typeof suggestFollowUps;
