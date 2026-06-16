@@ -54,6 +54,9 @@ next-env.d.ts
 /asdasd.txt
 /BUILD_PLAN.md
 /PLAN.md
+/DESIGN.md
+/nike/
+/screenshot-*.png
 
 # claude code session metadata
 /.claude/
