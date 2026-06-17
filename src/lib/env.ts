@@ -1,3 +1,10 @@
+/**
+ * @fileoverview Validated environment variables.
+ *
+ * Parse and validate required env vars at module load time so the app fails
+ * fast with a clear message rather than crashing mid-request with a cryptic
+ * "undefined" error. Import `env` instead of `process.env` everywhere.
+ */
 import { z } from "zod";
 
 const envSchema = z.object({
@@ -5,4 +12,5 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
 });
 
+/** Validated, type-safe environment variables. Throws at startup if any are missing. */
 export const env = envSchema.parse(process.env);

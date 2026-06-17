@@ -1,3 +1,23 @@
+/**
+ * @fileoverview Eval case definitions for the LLM behavior test suite.
+ *
+ * Each `EvalCase` sends one or more user turns through `streamText` with the real
+ * system prompt and tools (same model, same config as production), then runs a
+ * **programmatic check** — no LLM judge, no scoring rubric. Pass/fail is deterministic:
+ * did the model call the right tool, with the right params, and mention the right things?
+ *
+ * Cases cover:
+ * - Correct tool routing (category vs. search vs. browse, getProduct for follow-ups)
+ * - Param correctness (`sortBy: price`, `rankBy: budgetBestRated`, `category: fragrances`)
+ * - Off-catalog refusal (no tool call, no invented price)
+ * - Multi-intent (≥2 separate `searchProducts` calls)
+ * - Groundedness (prices in reply must match prices in tool results)
+ * - Product type fidelity (suits/corsets not presented as dresses)
+ * - Show-more deduplication (second search returns different product IDs)
+ * - Follow-up suggestions (at least 2 chips via `suggestFollowUps`)
+ *
+ * Run with: `npx tsx tests/evals/run-evals.ts [case-id]`
+ */
 import type { ModelMessage } from "ai";
 
 /**

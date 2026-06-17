@@ -1,3 +1,24 @@
+/**
+ * @fileoverview Main chat window — wires together AI SDK's `useChat` with cart state,
+ * tool approval handling, message rendering, and the input bar.
+ *
+ * `ChatWindow` is a thin wrapper that provides `CartProvider` context, then delegates
+ * to `ChatWindowInner` which accesses cart actions via `useCart`.
+ *
+ * Key design decisions:
+ * - `DefaultChatTransport` passes `conversationId` in every request body so the server
+ *   route can look up the correct conversation without it being in the URL.
+ * - `sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses` keeps
+ *   the stream paused until the user has responded to ALL pending `needsApproval` tools,
+ *   then auto-resumes — no extra button click needed after approve/deny.
+ * - Cart mutations (`addItem`, `clear`) are driven by the message part stream in a
+ *   `useEffect`, with a `handledToolCallIds` ref preventing double-application on
+ *   re-renders (React Strict Mode or status flips can re-run effects).
+ * - `timestamps` are memoized from `message.metadata.createdAt` (injected by
+ *   `persistence.ts` on load) so the timestamp map doesn't recreate on every render.
+ * - `router.refresh()` after 1 second gives the server-side title generation time to
+ *   commit before the sidebar re-fetches, avoiding a flash of "New conversation".
+ */
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -90,6 +111,7 @@ function ChatWindowInner({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
+      <h1 className="sr-only">Bazak Shopping Copilot</h1>
       <CartBar />
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1">
@@ -105,8 +127,8 @@ function ChatWindowInner({
             />
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-              <div className="text-5xl">🛍️</div>
-              <h2 className="text-2xl font-semibold tracking-tight">Hey, I&apos;m your shopping assistant!</h2>
+              <div className="text-5xl" aria-hidden="true">🛍️</div>
+              <p className="text-2xl font-semibold tracking-tight">Hey, I&apos;m your shopping assistant!</p>
               <p className="max-w-sm text-muted-foreground">
                 Tell me what you&apos;re looking for — a gift 🎁, something for yourself, or just browsing — and I&apos;ll find the best options for you ✨
               </p>

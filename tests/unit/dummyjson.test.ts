@@ -1,3 +1,23 @@
+/**
+ * @fileoverview Unit tests for `src/lib/dummyjson.ts`.
+ *
+ * Strategy: mock `global.fetch` per-test with `vi.fn()` so no network is hit.
+ * Every test verifies exactly one behavioral contract — URL routing, query params,
+ * client-side sorting logic, or error propagation — in isolation from the rest of
+ * the stack (no DB, no AI, no real API key).
+ *
+ * Test groups:
+ * - `searchProducts URL building` — verifies the three routing branches (category,
+ *   search, browse) and that `select`, `limit`, `sortBy`/`order`, and the full-pool
+ *   `limit=0` override for `rankBy` all produce the right URL.
+ * - `searchProducts rankBy=budgetBestRated` — end-to-end sorting logic: rating filter,
+ *   price-ascending sort, slice to limit, and the rating-filter fallback when nothing
+ *   qualifies.
+ * - `searchProducts error handling` — HTTP error and thrown exception both return
+ *   `{ products: [], error }` instead of throwing.
+ * - `getProduct` — single product fetch normalizes all detail fields.
+ * - `listCategories` — passthrough to `/products/category-list`.
+ */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { searchProducts, getProduct, listCategories } from "@/lib/dummyjson";
 

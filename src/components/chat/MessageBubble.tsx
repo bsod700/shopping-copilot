@@ -1,3 +1,24 @@
+/**
+ * @fileoverview Single message bubble — renders all AI SDK message part types.
+ *
+ * Handles the following `part.type` values:
+ * - `"text"` — rendered as Markdown inside a styled bubble
+ * - `"tool-searchProducts"` — skeleton while pending, `ProductResults` when done
+ * - `"tool-getProduct"` / `"tool-listCategories"` — hidden when done (data shown via text)
+ * - `"tool-addToCart"` — approve/deny buttons, confirmation, or denial message
+ * - `"tool-checkout"` — approve/deny buttons, order id, or cancellation message
+ * - `"tool-suggestFollowUps"` — rendered LAST outside the main map loop as chip buttons
+ * - `"step-start"` / `"reasoning"` — suppressed (handled by ThinkingSteps separately)
+ *
+ * Duplicate text dedup: the AI SDK re-emits the accumulated text as a new text part
+ * at the start of each tool-call step. Without dedup, the user sees the same paragraph
+ * twice. The filter compares each text part against the previous text part and drops
+ * it if identical.
+ *
+ * `suggestFollowUps` chips are rendered in a second pass after the main part loop so
+ * they always appear at the end of the message regardless of where in the stream the
+ * model called the tool.
+ */
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";

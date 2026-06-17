@@ -1,3 +1,22 @@
+/**
+ * @fileoverview System prompt for the shopping assistant.
+ *
+ * This single string is the primary behavioral contract for the model. It covers:
+ * - The 24 DummyJSON category slugs and their non-obvious naming quirks
+ * - The "groceries" bucket (vegetables, fruits, etc. are mixed together — requires query)
+ * - Product-type filtering: categories are loose buckets; off-type items must be dropped
+ * - The SHOW ALL RULE: limit:20 = zero filters, never mention filtering in response
+ * - Off-catalog handling: no fake search for travel/services/digital goods
+ * - Ambiguous query handling: be honest about scope, explain what was searched
+ * - Multi-intent: one searchProducts call per distinct ask
+ * - Follow-up questions: use getProduct (id already known), not searchProducts again
+ * - Sort/reorder: always re-call searchProducts with new params, never client-sort
+ * - "Show more" broadening: set limit:20, drop rankBy, only surface unseen products
+ * - Cart + checkout: call tools directly after user intent, no "are you sure?" text
+ * - Response order: text → tool call → post-card context (never repeat card data)
+ * - suggestFollowUps: call last on every product-search turn
+ * - Groundedness: only describe products that came back from a tool call
+ */
 export const SYSTEM_PROMPT = `You are a shopping assistant for an online store backed by the DummyJSON product catalog.
 
 ## Scope

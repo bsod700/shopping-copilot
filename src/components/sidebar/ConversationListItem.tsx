@@ -1,3 +1,13 @@
+/**
+ * @fileoverview Single conversation row in the sidebar list.
+ *
+ * Shows a link to the conversation. A trash icon appears on hover (or focus)
+ * and opens an `AlertDialog` confirmation before deleting. After deletion:
+ * - If this was the active conversation: redirects to `/` (which creates a fresh one)
+ * - Otherwise: calls `router.refresh()` to re-fetch the sidebar list server-side
+ *
+ * `data-testid="conversation-item"` is used by Playwright E2E tests.
+ */
 "use client";
 
 import { useState } from "react";

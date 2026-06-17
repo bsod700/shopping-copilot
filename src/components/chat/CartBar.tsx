@@ -1,3 +1,18 @@
+/**
+ * @fileoverview Top-bar cart button and slide-in cart drawer.
+ *
+ * The cart trigger is always visible in the top bar. Clicking it opens a Sheet
+ * drawer showing all cart items with +/- quantity controls, line totals, and a
+ * remove button per item.
+ *
+ * Clicking a cart item title opens `ProductDetailSheet` for that product. If the
+ * `CartItem` still has its `product` reference (added from search results), the
+ * sheet opens immediately. Otherwise it fetches from `/api/products/[id]` with a
+ * loading state on the button.
+ *
+ * `ProductDetailSheet` is rendered OUTSIDE the cart `Sheet` component to avoid
+ * nesting two Radix Sheet portals, which causes z-index stacking issues on some browsers.
+ */
 "use client";
 
 import { useState } from "react";

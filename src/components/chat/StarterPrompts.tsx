@@ -1,3 +1,10 @@
+/**
+ * @fileoverview Starter prompt chips shown on a fresh conversation before the user types.
+ *
+ * Each prompt is paired with a fixed Lucide icon (cycling via index if there are ever
+ * more prompts than icons). Clicking a chip calls `onSelect` which submits the prompt
+ * text directly — the user doesn't need to type anything.
+ */
 "use client";
 
 import { TrendingUp, Laptop, Shirt, Glasses } from "lucide-react";

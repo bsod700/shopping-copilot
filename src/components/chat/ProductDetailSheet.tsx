@@ -1,3 +1,17 @@
+/**
+ * @fileoverview Product detail sheet — a slide-in panel with full product info and reviews.
+ *
+ * Opens when the user clicks a `ProductCard`. The sheet has two data tiers:
+ * 1. **Immediately available** (from the `product` prop passed by the carousel): title,
+ *    description, price, rating, availability, discount. Rendered without any loading state.
+ * 2. **Fetched on open** (from `/api/products/[id]`): stock count, warranty, shipping,
+ *    return policy, and up to 3 reviews. Shown behind a skeleton while loading.
+ *
+ * The fetch is triggered inside a `useEffect` that resets on close (`open === false`)
+ * so stale detail data from a previous product doesn't flash when a new product is opened.
+ * `DetailSkeleton` mirrors the exact grid structure of `DetailContent` to prevent layout
+ * shift when the data loads.
+ */
 "use client";
 
 import { useEffect, useState } from "react";

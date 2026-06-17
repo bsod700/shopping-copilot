@@ -1,3 +1,8 @@
+/**
+ * @fileoverview Skeleton placeholder shown by `<Suspense>` while `ChatWindowLoader`
+ * is fetching initial messages and starter prompts server-side. Mirrors the rough
+ * layout of the chat window (message bubbles + input bar) to prevent layout shift.
+ */
 import { Skeleton } from "@/components/ui/skeleton";
 
 export function ChatWindowSkeleton() {

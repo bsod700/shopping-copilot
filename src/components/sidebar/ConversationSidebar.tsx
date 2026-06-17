@@ -1,3 +1,18 @@
+/**
+ * @fileoverview Conversation sidebar — persistent at ≥1300px, drawer below.
+ *
+ * At wide viewports (≥1300px) the sidebar is a fixed-width `<aside>` always visible
+ * alongside the chat. At narrower viewports a hamburger button opens the same content
+ * in a Radix Sheet (slide-in drawer from the left), so the chat area gets full width
+ * on mobile/tablet.
+ *
+ * `SidebarContent` is a shared render function used by both the persistent aside and
+ * the drawer Sheet to avoid duplicating the conversation list markup.
+ *
+ * "New chat" calls `POST /api/conversations` and navigates to the new conversation id,
+ * rather than navigating to `/` and relying on `findOrCreateEmptyConversation`, so the
+ * sidebar always creates a truly fresh conversation regardless of existing empty ones.
+ */
 "use client";
 
 import { useRouter } from "next/navigation";

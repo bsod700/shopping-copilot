@@ -1,3 +1,19 @@
+/**
+ * @fileoverview DummyJSON Products API client and normalizer.
+ *
+ * Three public functions:
+ * - `searchProducts` — search/filter/sort the catalog (main retrieval path)
+ * - `getProduct` — fetch full details for one product by id
+ * - `listCategories` — get all 24 category slugs (cached 24h, data never changes)
+ *
+ * All functions return a result object (`{ products/product/categories, error? }`)
+ * rather than throwing, so the AI tool layer can forward errors to the model
+ * honestly instead of letting an unhandled exception crash the route.
+ *
+ * Fetch is wrapped with a 5-second timeout via `AbortSignal.timeout` and Next.js
+ * data-cache revalidation (`next: { revalidate: 3600 }`) so repeated identical
+ * queries within an hour hit the cache, not the network.
+ */
 import type { Product, ProductDetail } from "./types";
 
 const BASE_URL = "https://dummyjson.com/products";
@@ -40,22 +56,43 @@ function normalizeProduct(raw: Record<string, unknown>): Product {
   };
 }
 
+/** Input shape for `searchProducts`, shared with the AI tool schema. */
 export interface SearchProductsInput {
   query?: string;
   category?: string;
   sortBy?: "price" | "rating" | "title";
   order?: "asc" | "desc";
+  /** `"budgetBestRated"`: filters to rating >= 4 then sorts cheapest first. Overrides sortBy/order. */
   rankBy?: "budgetBestRated";
   limit?: number;
   minRating?: number;
   inStock?: boolean;
 }
 
+/** Result envelope returned by `searchProducts`. `error` is set on network/API failure. */
 export interface SearchProductsResult {
   products: Product[];
   error?: string;
 }
 
+/**
+ * Search and filter the DummyJSON product catalog.
+ *
+ * Route selection (in priority order):
+ * 1. `category` set → `/products/category/{slug}` (most precise for named categories)
+ * 2. `query` set → `/products/search?q=` (free-text across title + description)
+ * 3. Neither → `/products` (full catalog, useful with sortBy/order)
+ *
+ * When both `category` and `query` are provided, the category endpoint is used and
+ * the query is applied as a client-side title/tag filter afterwards — the DummyJSON
+ * API silently ignores `q` on category endpoints.
+ *
+ * Sorting is always applied client-side after fetching the full result pool, because
+ * DummyJSON's server-side sort is unreliable on category endpoints.
+ *
+ * DummyJSON has no price-range filter (`minPrice`/`maxPrice`). "Cheap" queries are
+ * approximated by `sortBy:"price", order:"asc"` — an intentional, documented trade-off.
+ */
 export async function searchProducts({
   query,
   category,
@@ -138,11 +175,19 @@ export async function searchProducts({
   return { products: products.slice(0, limit) };
 }
 
+/** Result envelope returned by `getProduct`. `product` is null on error. */
 export interface GetProductResult {
   product: ProductDetail | null;
   error?: string;
 }
 
+/**
+ * Fetch full details for a single product by numeric id.
+ *
+ * Returns the extended `ProductDetail` type which includes stock count, images,
+ * warranty, return policy, shipping info, and reviews. Used when the user asks
+ * follow-up questions about a specific product already shown in search results.
+ */
 export async function getProduct(id: number): Promise<GetProductResult> {
   const { data, error } = await safeFetchJson<Record<string, unknown>>(`${BASE_URL}/${id}`);
   if (error || !data) {
@@ -162,11 +207,20 @@ export async function getProduct(id: number): Promise<GetProductResult> {
   };
 }
 
+/** Result envelope returned by `listCategories`. */
 export interface ListCategoriesResult {
   categories: string[];
   error?: string;
 }
 
+/**
+ * Fetch the full list of DummyJSON category slugs.
+ *
+ * The category list is static demo data that never changes, so it is cached
+ * aggressively (24-hour revalidation) via Next.js data cache. The model calls
+ * this when it's unsure of the exact slug for a user's request, since slugs
+ * are sometimes non-obvious (e.g. `"womens-jewellery"` not `"jewelry"`).
+ */
 export async function listCategories(): Promise<ListCategoriesResult> {
   // Category list is static demo data, cache aggressively (24h).
   const { data, error } = await safeFetchJson<string[]>(`${BASE_URL}/category-list`, 86400);

@@ -1,3 +1,18 @@
+/**
+ * @fileoverview Integration tests for `searchProducts` and `getProduct` using a realistic fixture.
+ *
+ * Unlike the unit tests, which verify URL routing and sorting logic with minimal stub data,
+ * these tests feed a fixture that mirrors a real DummyJSON response (`tests/fixtures/products.json`)
+ * to verify that the full normalization pipeline — field mapping, type coercion, `brand`,
+ * `availabilityStatus`, nested `reviews` — produces properly shaped `Product`/`ProductDetail`
+ * objects that the UI and AI tools can consume without surprises.
+ *
+ * `global.fetch` is still mocked (no real network) so tests are deterministic, but the fixture
+ * payload is rich enough to catch shape mismatches that minimal stubs would miss.
+ *
+ * The `rankBy=budgetBestRated` test uses the fixture's real rating values to verify that
+ * Apple MacBook Pro (rating 2.99) is excluded while Lenovo (1199.99, rating ≥4) wins.
+ */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { searchProducts, getProduct } from "@/lib/dummyjson";
 import fixture from "../fixtures/products.json";

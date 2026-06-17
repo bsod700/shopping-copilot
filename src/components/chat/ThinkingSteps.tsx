@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Thinking steps indicator shown above the assistant message bubble.
+ *
+ * Scans the message parts for tool-call and reasoning parts and displays:
+ * - "Thinking..." with the currently-active step label while the model is running tools
+ * - "Found products worth seeing" (or "Response ready") with a checkmark once all steps
+ *   are complete — a summary that persists after streaming ends so the user knows the
+ *   model did meaningful work before its text response.
+ *
+ * `getCompletionText` distinguishes search-heavy turns (showed products) from turns that
+ * only used lookup tools (getProduct, listCategories) for a more descriptive summary.
+ */
 "use client";
 
 import { CheckCircle2 } from "lucide-react";

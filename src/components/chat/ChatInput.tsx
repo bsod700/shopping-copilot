@@ -1,3 +1,17 @@
+/**
+ * @fileoverview Auto-resizing chat input bar with send/stop toggle.
+ *
+ * The textarea grows from 1 row up to 200px as the user types, then scrolls
+ * internally. Enter submits (Shift+Enter inserts a newline). While streaming,
+ * the send button is replaced with a Stop button.
+ *
+ * Focus is automatically returned to the textarea when streaming finishes,
+ * tracked via a `wasStreaming` ref to detect the transition edge without
+ * running the focus effect on every status value.
+ *
+ * The `role="status" aria-live="polite"` span announces streaming state to
+ * screen readers without re-reading the message content.
+ */
 "use client";
 
 import { useEffect, useRef, useState } from "react";

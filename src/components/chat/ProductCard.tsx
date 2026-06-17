@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Product card — displays a single product in the search results carousel.
+ *
+ * Shows thumbnail, title, description snippet, discounted/original price, star rating,
+ * availability status chip, discount percentage chip, and cart quantity badge.
+ *
+ * Clicking the card body (excluding the Add to Cart button) opens the detail sheet via
+ * the `onSelect` callback. `e.stopPropagation()` on the Add to Cart button prevents it
+ * from also triggering `onSelect`.
+ *
+ * The `data-testid="product-card"` attribute is used by Playwright E2E tests.
+ */
 "use client";
 
 import Image from "next/image";
@@ -51,7 +63,7 @@ export function ProductCard({
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") onSelect?.(product);
       }}
-      className="w-[300px] shrink-0 cursor-pointer select-none overflow-hidden rounded-xl border border-border bg-card"
+      className="w-full cursor-pointer select-none overflow-hidden rounded-xl border border-border bg-card"
     >
       {/* Image with chips */}
       <div className="relative aspect-square w-full overflow-hidden bg-muted">

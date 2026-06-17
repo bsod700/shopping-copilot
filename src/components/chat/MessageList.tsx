@@ -1,3 +1,18 @@
+/**
+ * @fileoverview Scrollable message list with auto-scroll and scroll-to-bottom button.
+ *
+ * Auto-scroll behavior: on each message/status update, scrolls to the bottom only
+ * if the user is already within 100px of the bottom (or on the very first render).
+ * This prevents hijacking the scroll position when the user is reading earlier messages
+ * while the assistant streams a long response.
+ *
+ * The scroll-to-bottom button appears when the viewport is more than 100px from the
+ * bottom, giving the user a one-click escape from "I scrolled up to read, now I want
+ * to jump back to the live response."
+ *
+ * `aria-live="polite"` on the scroll area announces new messages to screen readers
+ * without interrupting ongoing speech.
+ */
 import { useEffect, useRef, useState } from "react";
 import { ArrowDown, Loader2, RefreshCw } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";

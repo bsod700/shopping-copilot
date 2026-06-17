@@ -1,3 +1,24 @@
+/**
+ * @fileoverview AI tool definitions for the shopping assistant.
+ *
+ * All tools are built with Vercel AI SDK's `tool()` helper and registered in
+ * `app/api/chat/route.ts`. Two tools carry `needsApproval: true` which causes the
+ * AI SDK to pause the stream and emit an approval request to the client before
+ * the tool's `execute` function runs — the user sees an approve/deny dialog in the UI.
+ *
+ * Two cross-cutting concerns are implemented here at the framework level so the
+ * model doesn't need to be prompted into them:
+ *
+ * 1. **In-memory result cache** (`withCache`) — keyed by serialized input, 5-min TTL.
+ *    Repeated or retried calls with identical params return instantly without hitting
+ *    the DummyJSON API again. Scoped to the process lifetime (not per-conversation).
+ *
+ * 2. **Per-conversation shown-IDs tracking** (`shownIdsByConversation`) — records
+ *    which product ids the assistant has already returned for each category/query key
+ *    within a conversation. On "show more" follow-ups, `createSearchProductsTool`
+ *    detects when all results were already shown and fetches a broader pool to surface
+ *    fresh products instead of repeating the same handful.
+ */
 import { tool } from "ai";
 import { z } from "zod";
 import {
@@ -35,6 +56,18 @@ function shownKey(input: SearchProductsInput): string {
   return input.category ?? input.query ?? "__all__";
 }
 
+/**
+ * Factory that creates a `searchProducts` tool instance bound to a specific conversation.
+ *
+ * The factory pattern is required because the tool needs to close over `conversationId`
+ * to read/write the per-conversation shown-IDs map. A module-level singleton tool cannot
+ * do this — each POST request calls the factory with the conversation's id.
+ *
+ * The tool enforces one hard invariant at the framework level (not just in the system
+ * prompt): when `limit === 20` (the "show all" sentinel), all narrowing filters are
+ * stripped unconditionally so the model can't accidentally zero out results on a
+ * full-catalog browse.
+ */
 export function createSearchProductsTool(conversationId: string) {
   return tool({
     description:
@@ -118,6 +151,13 @@ export function createSearchProductsTool(conversationId: string) {
   });
 }
 
+/**
+ * Fetch full details for one product by numeric id.
+ *
+ * Used for follow-up questions about a product already shown in search results
+ * ("is it in stock?", "what's the warranty?", "any reviews?"). Results are
+ * cached for 5 minutes so repeated follow-ups on the same product are free.
+ */
 export const getProduct = tool({
   description:
     "Get full details for ONE specific product by its numeric id, including stock, brand, warranty, " +
@@ -130,6 +170,14 @@ export const getProduct = tool({
   execute: async ({ id }) => withCache(`product:${id}`, () => dummyjsonGetProduct(id)),
 });
 
+/**
+ * Emit 2-4 follow-up suggestion chips after the model's final text reply.
+ *
+ * The model is instructed to call this last in every turn so the UI can render
+ * tappable chips below the message. The `execute` function just echoes the
+ * suggestions back so they appear as a tool-result part — `MessageBubble` reads
+ * that part and renders the chips outside the main message bubble.
+ */
 export const suggestFollowUps = tool({
   description:
     "Call this LAST, after your text reply, to offer the user 2-4 short follow-up actions they can " +
@@ -141,6 +189,14 @@ export const suggestFollowUps = tool({
   execute: async ({ suggestions }) => ({ suggestions }),
 });
 
+/**
+ * Add a product to the cart with human-in-the-loop approval.
+ *
+ * `needsApproval: true` causes the AI SDK to pause the stream and emit an
+ * approval request to the client. The user sees a confirm/deny dialog rendered
+ * by `ChatWindow` before `execute` runs. On deny, the tool result is skipped
+ * and the model receives a denial signal.
+ */
 export const addToCart = tool({
   description:
     "Add a product to the user's cart. Only call this after the user has clearly asked to add/buy a " +
@@ -157,6 +213,13 @@ export const addToCart = tool({
   execute: async (input) => ({ added: true, ...input }),
 });
 
+/**
+ * Place a demo order for the current cart contents, with human-in-the-loop approval.
+ *
+ * Like `addToCart`, `needsApproval: true` gates this behind a UI confirmation.
+ * No real payment is processed — `execute` generates a random demo order id for
+ * display purposes only.
+ */
 export const checkout = tool({
   description:
     "Place a demo order for everything currently in the user's cart. Only call this when the user " +
@@ -170,6 +233,13 @@ export const checkout = tool({
   }),
 });
 
+/**
+ * List all available product category slugs.
+ *
+ * Used by the model when it's unsure of the exact slug for a user's request
+ * (e.g. "womens-jewellery" not "jewelry"). Results are cached for 5 minutes;
+ * DummyJSON's category list is static demo data and never changes at runtime.
+ */
 export const listCategories = tool({
   description:
     "List all product category slugs this shop carries. Use this when the user asks what categories/types " +

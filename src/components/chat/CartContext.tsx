@@ -1,3 +1,17 @@
+/**
+ * @fileoverview Cart state — React context backed by localStorage.
+ *
+ * The cart is client-side only: no server state, no checkout API — this is a demo.
+ * localStorage persistence lets the cart survive page refreshes and navigation between
+ * conversations. State is initialized from localStorage on mount (one-time read) and
+ * synced to localStorage on every items change.
+ *
+ * `addItem` merges quantities rather than replacing, so calling it twice with the
+ * same productId increments the count instead of resetting to 1.
+ *
+ * `useCart` throws if used outside `CartProvider` to give a clear error rather than
+ * a silent `null` deref.
+ */
 "use client";
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";

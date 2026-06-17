@@ -1,3 +1,22 @@
+/**
+ * @fileoverview Playwright E2E tests for the core chat and persistence flows.
+ *
+ * These tests run against a real Next.js dev server (configured in `playwright.config.ts`)
+ * and make live OpenAI API calls — they are the only test layer that exercises the full
+ * stack end-to-end: browser → Next.js → AI SDK → OpenAI → DummyJSON → SQLite → UI.
+ *
+ * Tests run `.serial` (not parallel) because they share the same server and each test's
+ * first message creates a new conversation that subsequent assertions depend on.
+ *
+ * Key contracts verified:
+ * - **core flow**: a typed message produces visible product cards (`data-testid="product-card"`)
+ *   with image and price — the fundamental render path.
+ * - **persistence**: messages and cards survive a full page reload, verifying the
+ *   delete-then-recreate transaction landed before the reload. Uses `toPass` retry loop
+ *   because `onFinish` persistence is async and may not complete before the reload.
+ * - **new conversation**: "New chat" navigates to a fresh URL, the previous messages are
+ *   gone, and the sidebar gains a new `data-testid="conversation-item"` entry.
+ */
 import { test, expect } from "@playwright/test";
 
 test.describe.serial("chat flow", () => {

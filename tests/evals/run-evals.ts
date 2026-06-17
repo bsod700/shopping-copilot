@@ -1,3 +1,23 @@
+/**
+ * @fileoverview CLI runner for the eval suite defined in `prompts.ts`.
+ *
+ * Usage:
+ *   npx tsx tests/evals/run-evals.ts          # run all cases
+ *   npx tsx tests/evals/run-evals.ts <id>     # run one case by id
+ *
+ * Each case is run through `runCase`, which replays all turns sequentially,
+ * accumulates tool calls + tool results across steps, and returns an `EvalContext`
+ * for the case's `check` function. Multi-turn cases pass the full conversation
+ * history into each subsequent turn, so the model sees realistic context.
+ *
+ * Design decisions:
+ * - Uses `gpt-5.4-mini` (same model as production) so prompt regressions are caught
+ *   against the real model, not a cheaper stand-in that might behave differently.
+ * - `stopWhen: stepCountIs(5)` mirrors the production cap to avoid unbounded loops.
+ * - `needsApproval: true` tools (`addToCart`, `checkout`) are included so the model
+ *   doesn't confuse their absence with a missing tool and hallucinate a workaround.
+ * - Exits with code 1 if any case fails, so CI can gate on evals.
+ */
 import { openai } from "@ai-sdk/openai";
 import { streamText, stepCountIs, type ModelMessage } from "ai";
 import {
