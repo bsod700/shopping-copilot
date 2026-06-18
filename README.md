@@ -24,8 +24,6 @@ npm run dev
 # → Open http://localhost:3000
 ```
 
-No Docker, no external services — everything runs locally with a SQLite file.
-
 ---
 
 ## Architecture & Framework Choice

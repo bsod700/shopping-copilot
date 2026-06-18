@@ -24,7 +24,7 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
-import { Package, CheckCircle2, XCircle, Shield, Truck, RotateCcw } from "lucide-react";
+import { Package, Shield, Truck, RotateCcw } from "lucide-react";
 import { useCart } from "./CartContext";
 import type { Product, ProductDetail } from "@/lib/types";
 
@@ -38,19 +38,15 @@ export function ProductDetailSheet({
   onOpenChange: (open: boolean) => void;
 }) {
   const [detail, setDetail] = useState<ProductDetail | null>(null);
-  const [loading, setLoading] = useState(false);
+  const loading = open && !!product && detail === null;
   const { addItem } = useCart();
 
   useEffect(() => {
-    if (!open || !product) {
-      setDetail(null);
-      return;
-    }
-    setLoading(true);
+    if (!open || !product) return;
     fetch(`/api/products/${product.id}`)
       .then((res) => res.json())
-      .then((data) => setDetail(data.product ?? null))
-      .finally(() => setLoading(false));
+      .then((data) => setDetail(data.product ?? null));
+    return () => setDetail(null);
   }, [open, product]);
 
   if (!product) return null;

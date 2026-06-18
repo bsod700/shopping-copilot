@@ -7,10 +7,10 @@
  */
 "use client";
 
-import { TrendingUp, Laptop, Shirt, Glasses } from "lucide-react";
+import { Tag, Laptop, Shirt, Glasses } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const PROMPT_ICONS = [TrendingUp, Laptop, Shirt, Glasses];
+const PROMPT_ICONS = [Tag, Laptop, Shirt, Glasses];
 
 export function StarterPrompts({
   prompts,

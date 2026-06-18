@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "eval": "tsx --env-file=.env tests/evals/run-evals.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.71",

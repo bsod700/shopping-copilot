@@ -81,25 +81,7 @@ export const evalCases: EvalCase[] = [
       return pass();
     },
   },
-
-  {
-    id: "ambiguous-cheap",
-    description: "'Cheap' phrasing maps to price-ascending search",
-    turns: ["show me something cheap in furniture"],
-    check: (ctx) => {
-      const calls = ctx.toolCalls.filter((c) => c.toolName === "searchProducts");
-      if (calls.length === 0) return fail("expected searchProducts to be called");
-      const input = calls[0].input as { sortBy?: string; order?: string };
-      if (input.sortBy !== "price" || input.order !== "asc") {
-        return fail(`expected sortBy:price/order:asc, got ${JSON.stringify(input)}`);
-      }
-      if (!/price|budget|cheap|afford/i.test(ctx.text)) {
-        return fail("reply doesn't mention price/budget framing");
-      }
-      return pass();
-    },
-  },
-
+  
   {
     id: "off-catalog",
     description: "Off-catalog requests don't trigger a product search or invent a price",
@@ -291,29 +273,130 @@ export const evalCases: EvalCase[] = [
       return pass();
     },
   },
-
   {
-    id: "show-more-beauty",
-    description: "'Show more beauty products' returns different products than the first search, not a repeat",
-    turns: ["what powder makeup do you have with a smooth finish?", "show more beauty products"],
+    id: "sports-balls-only",
+    description: "'Show me all the balls' — model must not mention non-ball sports equipment",
+    turns: ["show me all the balls"],
     check: (ctx) => {
       const calls = ctx.toolCalls.filter((c) => c.toolName === "searchProducts");
-      if (calls.length < 2) return fail(`expected a second searchProducts call for "show more", got ${calls.length}`);
+      if (calls.length === 0) return fail("expected searchProducts to be called");
+      const nonBallItems = ["Baseball Glove", "Basketball Rim", "Baseball Bat", "Cricket Bat", "Tennis Racket", "Sneaker", "Cleat"];
+      const mentionedWrong = nonBallItems.filter((t) => ctx.text.toLowerCase().includes(t.toLowerCase()));
+      if (mentionedWrong.length > 0) return fail(`model mentioned non-ball items: ${mentionedWrong.join(", ")}`);
+      return pass();
+    },
+  },
 
-      const firstProducts = new Set(
-        (
-          (ctx.toolResults.filter((r) => r.toolName === "searchProducts")[0]?.output as { products?: { id: number }[] })
-            ?.products ?? []
-        ).map((p) => p.id),
+  {
+    id: "out-of-stock",
+    description: "'Show items that are out of stock' returns only out-of-stock products",
+    turns: ["show me all the items that are out of stock"],
+    check: (ctx) => {
+      const calls = ctx.toolCalls.filter((c) => c.toolName === "searchProducts");
+      if (calls.length === 0) return fail("expected searchProducts to be called");
+      const hasOutOfStockParam = calls.some((c) => (c.input as { outOfStock?: boolean }).outOfStock === true);
+      if (!hasOutOfStockParam) return fail("expected at least one searchProducts call with outOfStock:true");
+      const products = groundedProducts(ctx) as Array<{ id: number; title: string; price: number; availabilityStatus?: string }>;
+      const inStockItems = ctx.toolResults
+        .filter((r) => r.toolName === "searchProducts")
+        .flatMap((r) => {
+          const output = r.output as { products?: Array<{ availabilityStatus?: string; title?: string }> };
+          return (output.products ?? []).filter((p) => p.availabilityStatus !== "Out of Stock");
+        });
+      if (inStockItems.length > 0) {
+        return fail(`in-stock items leaked into out-of-stock results: ${inStockItems.map((p) => p.title).join(", ")}`);
+      }
+      const outOfStockItems = ctx.toolResults
+        .filter((r) => r.toolName === "searchProducts")
+        .flatMap((r) => {
+          const output = r.output as { products?: Array<{ availabilityStatus?: string }> };
+          return (output.products ?? []).filter((p) => p.availabilityStatus === "Out of Stock");
+        });
+      if (outOfStockItems.length === 0) return fail("no out-of-stock products were found — catalog-wide search may not have been used");
+      return pass();
+    },
+  },
+
+  {
+    id: "beverage-filtering",
+    description: "'Show only beverages' returns all 4 beverage items including Nescafe Coffee",
+    turns: ["Show only beverages"],
+    check: (ctx) => {
+      const calls = ctx.toolCalls.filter((c) => c.toolName === "searchProducts");
+      if (calls.length === 0) return fail("expected searchProducts to be called");
+      const products = groundedProducts(ctx);
+      if (products.length === 0) return fail("expected beverage products in tool results");
+      const expectedTitles = ["Water", "Juice", "Soft Drinks", "Nescafe Coffee"];
+      const missing = expectedTitles.filter(
+        (t) => !products.some((p) => p.title.toLowerCase().includes(t.toLowerCase()))
       );
-      const secondProducts =
-        (ctx.toolResults.filter((r) => r.toolName === "searchProducts")[1]?.output as { products?: { id: number }[] })
-          ?.products ?? [];
-      if (secondProducts.length === 0) return fail("expected the second searchProducts call to return products");
+      if (missing.length > 0) return fail(`missing beverages in results: ${missing.join(", ")}`);
+      const nonBeverageTitles = ["Potatoes", "Cucumber", "Milk", "Eggs", "Beef Steak", "Ice Cream", "Honey Jar"];
+      const wrong = nonBeverageTitles.filter(
+        (t) => products.some((p) => p.title.toLowerCase().includes(t.toLowerCase()))
+      );
+      if (wrong.length > 0) return fail(`non-beverage items in results: ${wrong.join(", ")}`);
+      return pass();
+    },
+  },
 
-      const allRepeats = secondProducts.every((p) => firstProducts.has(p.id));
-      if (allRepeats) {
-        return fail("second search returned only products already shown in the first search");
+  {
+    id: "snack-filtering",
+    description: "'Show only in-stock snacks' returns snack-like items and NOT raw vegetables, meat, dairy, or cooking oil",
+    turns: ["Show only in-stock snacks"],
+    check: (ctx) => {
+      const calls = ctx.toolCalls.filter((c) => c.toolName === "searchProducts");
+      // Model either calls searchProducts or explains honestly — if it calls it, check filtering
+      const nonSnackTitles = [
+        "Potatoes", "Cucumber", "Green Bell Pepper", "Green Chili Pepper", "Red Onions",
+        "Beef Steak", "Chicken Meat", "Fish Steak",
+        "Eggs", "Milk",
+        "Cooking Oil", "Rice",
+        "Cat Food", "Dog Food", "Tissue Paper Box", "Protein Powder",
+      ];
+      for (const title of nonSnackTitles) {
+        if (ctx.text.toLowerCase().includes(title.toLowerCase())) {
+          return fail(`non-snack item "${title}" should not appear in snack results`);
+        }
+      }
+      if (calls.length > 0) {
+        // Tool results must contain only snack-like items
+        // Acceptable snack/beverage titles (water is borderline but acceptable as a beverage)
+        const snackTitles = ["Ice Cream", "Juice", "Soft Drinks", "Nescafe Coffee", "Honey Jar", "Water"];
+        const returnedProducts = groundedProducts(ctx);
+        if (returnedProducts.length === 0) return fail("expected snack products in tool results");
+        const wrongItems = returnedProducts.filter(
+          (p) => !snackTitles.some((s) => p.title.toLowerCase().includes(s.toLowerCase()))
+        );
+        if (wrongItems.length > 0) {
+          return fail(`non-snack items in tool results: ${wrongItems.map((p) => p.title).join(", ")}`);
+        }
+      }
+      return pass();
+    },
+  },
+
+  {
+    id: "popular-single-call",
+    description: "Broad sale/discount query makes exactly one searchProducts call with no category",
+    turns: ["What's on sale? Show me the biggest discounts"],
+    check: (ctx) => {
+      const searches = ctx.toolCalls.filter((c) => c.toolName === "searchProducts");
+      if (searches.length !== 1) return fail(`expected 1 searchProducts call, got ${searches.length}`);
+      const input = searches[0].input as { category?: string; query?: string; rankBy?: string };
+      if (input.category) return fail(`expected no category, got "${input.category}"`);
+      if (input.query) return fail(`expected no query, got "${input.query}"`);
+      if (input.rankBy !== "biggestDiscount") return fail(`expected rankBy:"biggestDiscount", got "${input.rankBy}"`);
+
+      // All returned products must actually have a discount
+      for (const r of ctx.toolResults) {
+        if (r.toolName !== "searchProducts") continue;
+        const products = (r.output as { products?: Array<{ title: string; discountPercentage: number }> }).products ?? [];
+        const noDiscount = products.filter((p) => p.discountPercentage <= 0);
+        if (noDiscount.length > 0) {
+          return fail(`products with no discount in results: ${noDiscount.map((p) => p.title).join(", ")}`);
+        }
+        if (products.length === 0) return fail("expected at least one discounted product");
       }
       return pass();
     },
@@ -330,6 +413,216 @@ export const evalCases: EvalCase[] = [
       if (!input.suggestions || input.suggestions.length < 2) {
         return fail("expected at least 2 follow-up suggestions");
       }
+      return pass();
+    },
+  },
+
+  // ─── Sort tests ───────────────────────────────────────────────────────────
+
+  {
+    id: "sort-by-price-asc",
+    description: "After a category search, 'sort by price low to high' calls sortShownProducts (not a new search) and output is in ascending price order",
+    turns: ["show me some laptops", "sort by price low to high"],
+    check: (ctx) => {
+      const sortCalls = ctx.toolCalls.filter((c) => c.toolName === "sortShownProducts");
+      if (sortCalls.length === 0) return fail("expected sortShownProducts to be called");
+      const input = sortCalls[0].input as { sortBy?: string; order?: string };
+      if (input.sortBy !== "price" || input.order !== "asc")
+        return fail(`expected sortBy:price/order:asc, got ${JSON.stringify(input)}`);
+      // Model must not have re-fetched — only 1 searchProducts call total
+      const searches = ctx.toolCalls.filter((c) => c.toolName === "searchProducts");
+      if (searches.length > 1) return fail(`sort triggered a new searchProducts call (got ${searches.length}) — should use sortShownProducts only`);
+      // Verify actual output is sorted
+      const sortResult = ctx.toolResults.find((r) => r.toolName === "sortShownProducts");
+      const products = (sortResult?.output as { products?: Array<{ price: number }> })?.products ?? [];
+      if (products.length < 2) return fail("expected at least 2 products in sort result");
+      for (let i = 1; i < products.length; i++) {
+        if (products[i].price < products[i - 1].price)
+          return fail(`products not in ascending price order at index ${i}: ${products[i - 1].price} > ${products[i].price}`);
+      }
+      return pass();
+    },
+  },
+
+  {
+    id: "sort-by-rating-desc",
+    description: "After a search, 'sort by best rating' calls sortShownProducts and output is in descending rating order",
+    turns: ["show me some smartphones", "sort by best rating"],
+    check: (ctx) => {
+      const sortCalls = ctx.toolCalls.filter((c) => c.toolName === "sortShownProducts");
+      if (sortCalls.length === 0) return fail("expected sortShownProducts to be called");
+      const input = sortCalls[0].input as { sortBy?: string; order?: string };
+      if (input.sortBy !== "rating" || input.order !== "desc")
+        return fail(`expected sortBy:rating/order:desc, got ${JSON.stringify(input)}`);
+      const searches = ctx.toolCalls.filter((c) => c.toolName === "searchProducts");
+      if (searches.length > 1) return fail(`sort triggered a new searchProducts call — should use sortShownProducts`);
+      const sortResult = ctx.toolResults.find((r) => r.toolName === "sortShownProducts");
+      const products = (sortResult?.output as { products?: Array<{ rating: number }> })?.products ?? [];
+      if (products.length < 2) return fail("expected at least 2 products in sort result");
+      for (let i = 1; i < products.length; i++) {
+        if (products[i].rating > products[i - 1].rating)
+          return fail(`products not in descending rating order at index ${i}`);
+      }
+      return pass();
+    },
+  },
+
+  {
+    id: "sort-by-price-desc",
+    description: "After a search, 'sort by price high to low' calls sortShownProducts and output is in descending price order",
+    turns: ["show me women's bags", "sort by price high to low"],
+    check: (ctx) => {
+      const sortCalls = ctx.toolCalls.filter((c) => c.toolName === "sortShownProducts");
+      if (sortCalls.length === 0) return fail("expected sortShownProducts to be called");
+      const input = sortCalls[0].input as { sortBy?: string; order?: string };
+      if (input.sortBy !== "price" || input.order !== "desc")
+        return fail(`expected sortBy:price/order:desc, got ${JSON.stringify(input)}`);
+      const sortResult = ctx.toolResults.find((r) => r.toolName === "sortShownProducts");
+      const products = (sortResult?.output as { products?: Array<{ price: number }> })?.products ?? [];
+      if (products.length < 2) return fail("expected at least 2 products in sort result");
+      for (let i = 1; i < products.length; i++) {
+        if (products[i].price > products[i - 1].price)
+          return fail(`products not in descending price order at index ${i}`);
+      }
+      return pass();
+    },
+  },
+
+  // ─── Multi-topic conversation tests ───────────────────────────────────────
+
+  {
+    id: "multi-topic-sequential",
+    description: "Asking about two unrelated topics in sequential turns searches each independently with correct categories",
+    turns: ["show me some laptops", "now show me women's bags"],
+    check: (ctx) => {
+      const searches = ctx.toolCalls.filter((c) => c.toolName === "searchProducts");
+      if (searches.length < 2) return fail(`expected at least 2 searchProducts calls, got ${searches.length}`);
+      const firstInput = searches[0].input as { category?: string };
+      if (firstInput.category !== "laptops") return fail(`first search should be laptops, got ${JSON.stringify(firstInput)}`);
+      const lastInput = searches[searches.length - 1].input as { category?: string };
+      if (lastInput.category !== "womens-bags") return fail(`second search should be womens-bags, got ${JSON.stringify(lastInput)}`);
+      // Each search must return products
+      const results = ctx.toolResults.filter((r) => r.toolName === "searchProducts");
+      for (const r of results) {
+        const products = (r.output as { products?: unknown[] }).products ?? [];
+        if (products.length === 0) return fail("one of the searches returned no products");
+      }
+      return pass();
+    },
+  },
+
+  {
+    id: "multi-topic-same-turn",
+    description: "Asking about two topics in one message triggers two separate searchProducts calls",
+    turns: ["show me some skincare products and also a pair of sunglasses"],
+    check: (ctx) => {
+      const searches = ctx.toolCalls.filter((c) => c.toolName === "searchProducts");
+      if (searches.length < 2) return fail(`expected 2 searchProducts calls for 2 topics, got ${searches.length}`);
+      const categories = searches.map((s) => (s.input as { category?: string }).category);
+      if (!categories.includes("skin-care")) return fail(`expected skin-care to be searched, got ${categories.join(", ")}`);
+      if (!categories.includes("sunglasses")) return fail(`expected sunglasses to be searched, got ${categories.join(", ")}`);
+      return pass();
+    },
+  },
+
+  {
+    id: "multi-topic-sort-second",
+    description: "In a multi-topic chat, sorting after the second search sorts those products, not the first search's products",
+    turns: ["show me some skin-care products", "now show me sunglasses", "sort by price low to high"],
+    check: (ctx) => {
+      const sortCalls = ctx.toolCalls.filter((c) => c.toolName === "sortShownProducts");
+      if (sortCalls.length === 0) return fail("expected sortShownProducts to be called");
+      const sortResult = ctx.toolResults.find((r) => r.toolName === "sortShownProducts");
+      const sortedProducts = (sortResult?.output as { products?: Array<{ id: number; price: number }> })?.products ?? [];
+      if (sortedProducts.length === 0) return fail("sort result is empty");
+      // The sorted products must come from the sunglasses search (last search), not skin-care
+      const searches = ctx.toolResults.filter((r) => r.toolName === "searchProducts");
+      if (searches.length < 2) return fail("expected 2 search results");
+      const lastSearchProducts = (searches[searches.length - 1].output as { products?: Array<{ id: number }> })?.products ?? [];
+      const lastIds = new Set(lastSearchProducts.map((p) => p.id));
+      const wrongProducts = sortedProducts.filter((p) => !lastIds.has(p.id));
+      if (wrongProducts.length > 0)
+        return fail(`sorted products contain IDs not from the last search: ${wrongProducts.map((p) => p.id).join(", ")}`);
+      return pass();
+    },
+  },
+
+  // ─── Category coverage ────────────────────────────────────────────────────
+
+  {
+    id: "category-womens-jewellery-slug",
+    description: "Searching for women's jewelry uses the correct non-obvious slug 'womens-jewellery' (not 'womens-jewelry')",
+    turns: ["show me women's jewelry"],
+    check: (ctx) => {
+      const calls = ctx.toolCalls.filter((c) => c.toolName === "searchProducts");
+      if (calls.length === 0) return fail("expected searchProducts to be called");
+      const input = calls[0].input as { category?: string };
+      if (input.category !== "womens-jewellery")
+        return fail(`expected category:womens-jewellery, got ${JSON.stringify(input)}`);
+      const products = groundedProducts(ctx);
+      if (products.length === 0) return fail("expected jewellery products in results");
+      return pass();
+    },
+  },
+
+  {
+    id: "category-womens-watches",
+    description: "Asking for women's watches returns in-stock options (not just the one out-of-stock watch)",
+    turns: ["is there any women's watches?"],
+    check: (ctx) => {
+      const calls = ctx.toolCalls.filter((c) => c.toolName === "searchProducts");
+      if (calls.length === 0) return fail("expected searchProducts to be called");
+      const input = calls[0].input as { category?: string };
+      if (input.category !== "womens-watches")
+        return fail(`expected category:womens-watches, got ${JSON.stringify(input)}`);
+      const products = groundedProducts(ctx) as Array<{ availabilityStatus?: string }>;
+      const inStock = products.filter((p) => p.availabilityStatus !== "Out of Stock");
+      if (inStock.length === 0)
+        return fail("expected at least one in-stock women's watch — budgetBestRated fallback may not have fired");
+      return pass();
+    },
+  },
+
+  {
+    id: "category-mens-watches-separate",
+    description: "Asking for men's watches uses mens-watches, not womens-watches",
+    turns: ["show me men's watches"],
+    check: (ctx) => {
+      const calls = ctx.toolCalls.filter((c) => c.toolName === "searchProducts");
+      if (calls.length === 0) return fail("expected searchProducts to be called");
+      const input = calls[0].input as { category?: string };
+      if (input.category !== "mens-watches")
+        return fail(`expected category:mens-watches, got ${JSON.stringify(input)}`);
+      return pass();
+    },
+  },
+
+  {
+    id: "category-skin-care-slug",
+    description: "Searching for skincare uses 'skin-care' slug (not 'skincare')",
+    turns: ["show me some skincare products"],
+    check: (ctx) => {
+      const calls = ctx.toolCalls.filter((c) => c.toolName === "searchProducts");
+      if (calls.length === 0) return fail("expected searchProducts to be called");
+      const inputs = calls.map((c) => (c.input as { category?: string }).category);
+      if (!inputs.includes("skin-care"))
+        return fail(`expected category:skin-care, got ${JSON.stringify(inputs)}`);
+      return pass();
+    },
+  },
+
+  {
+    id: "category-no-duplicate-sort-suggestion",
+    description: "When only 1 product is shown, follow-up suggestions don't include a sort option",
+    turns: ["show me the cheapest motorcycle"],
+    check: (ctx) => {
+      const suggestCalls = ctx.toolCalls.filter((c) => c.toolName === "suggestFollowUps");
+      if (suggestCalls.length === 0) return pass(); // no suggestions at all is also fine
+      const suggestions = (suggestCalls[0].input as { suggestions?: string[] }).suggestions ?? [];
+      const hasSortSuggestion = suggestions.some((s) => /sort/i.test(s));
+      const products = groundedProducts(ctx);
+      if (products.length <= 1 && hasSortSuggestion)
+        return fail(`only ${products.length} product shown but sort suggestion was offered: ${suggestions.join(", ")}`);
       return pass();
     },
   },

@@ -97,6 +97,8 @@ export function MessageBubble({
             );
 
           case "tool-searchProducts":
+          case "tool-sortShownProducts":
+          case "tool-getBestRated":
             if (part.state === "output-available") {
               return <ProductResults key={i} products={part.output.products} />;
             }

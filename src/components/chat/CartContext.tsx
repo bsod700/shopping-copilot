@@ -39,12 +39,11 @@ const CartContext = createContext<CartContextValue | null>(null);
 const STORAGE_KEY = "bazak-cart";
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>([]);
-
-  useEffect(() => {
+  const [items, setItems] = useState<CartItem[]>(() => {
+    if (typeof window === "undefined") return [];
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) setItems(JSON.parse(stored));
-  }, []);
+    return stored ? (JSON.parse(stored) as CartItem[]) : [];
+  });
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));

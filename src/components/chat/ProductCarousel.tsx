@@ -43,6 +43,7 @@ export function ProductCarousel({ products }: { products: Product[] }) {
   const programmaticScrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isDragging = useRef(false);
+  const [isDraggingCursor, setIsDraggingCursor] = useState(false);
   const hasDragged = useRef(false);
   const dragStartX = useRef(0);
   const dragScrollLeft = useRef(0);
@@ -122,6 +123,7 @@ export function ProductCarousel({ products }: { products: Product[] }) {
   function handlePointerDown(e: React.PointerEvent) {
     if (e.pointerType === "touch") return;
     isDragging.current = true;
+    setIsDraggingCursor(true);
     hasDragged.current = false;
     dragStartX.current = e.clientX;
     dragScrollLeft.current = scrollRef.current?.scrollLeft ?? 0;
@@ -142,6 +144,7 @@ export function ProductCarousel({ products }: { products: Product[] }) {
   function handlePointerUp() {
     if (!isDragging.current) return;
     isDragging.current = false;
+    setIsDraggingCursor(false);
     if (scrollRef.current) {
       const nearest = Math.round(scrollRef.current.scrollLeft / cardStep);
       scrollToIndex(Math.max(0, Math.min(nearest, products.length - 1)));
@@ -179,7 +182,7 @@ export function ProductCarousel({ products }: { products: Product[] }) {
             scrollSnapType: "x mandatory",
             scrollbarWidth: "none",
             msOverflowStyle: "none",
-            cursor: isDragging.current ? "grabbing" : "grab",
+            cursor: isDraggingCursor ? "grabbing" : "grab",
           }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}

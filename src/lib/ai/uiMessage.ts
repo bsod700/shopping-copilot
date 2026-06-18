@@ -12,7 +12,9 @@
 import type { UIMessage, InferUITools } from "ai";
 import type {
   createSearchProductsTool,
+  createSortShownProductsTool,
   getProduct,
+  getBestRated,
   listCategories,
   suggestFollowUps,
   addToCart,
@@ -21,7 +23,9 @@ import type {
 
 type ChatTools = InferUITools<{
   searchProducts: ReturnType<typeof createSearchProductsTool>;
+  sortShownProducts: ReturnType<typeof createSortShownProductsTool>;
   getProduct: typeof getProduct;
+  getBestRated: typeof getBestRated;
   listCategories: typeof listCategories;
   suggestFollowUps: typeof suggestFollowUps;
   addToCart: typeof addToCart;

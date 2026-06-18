@@ -44,10 +44,10 @@ function normalizeProduct(raw: Record<string, unknown>): Product {
   return {
     id: raw.id as number,
     title: raw.title as string,
-    description: raw.description as string,
+    description: ((raw.description as string) ?? "").slice(0, 200),
     price: raw.price as number,
     discountPercentage: (raw.discountPercentage as number) ?? 0,
-    rating: (raw.rating as number) ?? 0,
+    rating: Math.round(((raw.rating as number) ?? 0) * 10) / 10,
     category: raw.category as string,
     thumbnail: raw.thumbnail as string,
     availabilityStatus: (raw.availabilityStatus as string) ?? "Unknown",
@@ -60,13 +60,21 @@ function normalizeProduct(raw: Record<string, unknown>): Product {
 export interface SearchProductsInput {
   query?: string;
   category?: string;
-  sortBy?: "price" | "rating" | "title";
+  sortBy?: "price" | "rating" | "title" | "discountPercentage";
   order?: "asc" | "desc";
-  /** `"budgetBestRated"`: filters to rating >= 4 then sorts cheapest first. Overrides sortBy/order. */
-  rankBy?: "budgetBestRated";
+  /** `"budgetBestRated"`: filters to rating >= 4 then sorts cheapest first. Overrides sortBy/order.
+   *  `"biggestDiscount"`: keeps only products with a discount > 0, sorts by discountPercentage desc.
+   *  `"discountedBestRated"`: keeps only products with a discount > 0, sorts by rating desc. */
+  rankBy?: "budgetBestRated" | "biggestDiscount" | "discountedBestRated";
   limit?: number;
   minRating?: number;
   inStock?: boolean;
+  /** Keep only products whose tags array contains at least one of these values (case-insensitive). */
+  filterByTags?: string[];
+  /** If true, return ONLY out-of-stock products (opposite of inStock). */
+  outOfStock?: boolean;
+  /** Keep only products where this color word appears in the title OR description (case-insensitive). */
+  colorFilter?: string;
 }
 
 /** Result envelope returned by `searchProducts`. `error` is set on network/API failure. */
@@ -102,6 +110,9 @@ export async function searchProducts({
   limit = 5,
   minRating,
   inStock,
+  filterByTags,
+  outOfStock,
+  colorFilter,
 }: SearchProductsInput): Promise<SearchProductsResult> {
   // Both a category and a query narrowing the same call: filter the category's
   // products by query afterwards (see below), so pull the full category pool here.
@@ -111,7 +122,7 @@ export async function searchProducts({
   // Pull the full pool whenever we need to rank, sort, or filter a category by
   // query — so the sort/rank/filter operates on every candidate, not just the
   // first N that happen to come back first.
-  params.set("limit", String(rankBy || bothSet || sortBy ? 0 : limit));
+  params.set("limit", String(rankBy || bothSet || sortBy || filterByTags?.length || outOfStock ? 0 : limit));
   params.set("select", SELECT_FIELDS);
   if (sortBy && !rankBy) params.set("sortBy", sortBy);
   if (order && !rankBy) params.set("order", order);
@@ -136,7 +147,9 @@ export async function searchProducts({
   }
   let products = data.products.map(normalizeProduct);
 
-  if (bothSet) {
+  // When filterByTags is set it is the authoritative sub-filter; skip the text-query
+  // pass so a stray query param can't accidentally zero out the tag-filtered set.
+  if (bothSet && !filterByTags?.length) {
     const q = query!.toLowerCase();
     products = products.filter(
       (p) => p.title.toLowerCase().includes(q) || p.tags.some((t) => t.toLowerCase().includes(q)),
@@ -144,19 +157,42 @@ export async function searchProducts({
   }
 
   // Apply explicit filters before ranking/sorting
-  if (inStock) {
+  if (filterByTags && filterByTags.length > 0) {
+    const allowed = filterByTags.map((t) => t.toLowerCase());
+    products = products.filter((p) => p.tags.some((t) => allowed.includes(t.toLowerCase())));
+  }
+  if (outOfStock) {
+    products = products.filter((p) => p.availabilityStatus === "Out of Stock");
+  } else if (inStock) {
     products = products.filter((p) => p.availabilityStatus !== "Out of Stock");
   }
   if (minRating != null) {
     products = products.filter((p) => p.rating >= minRating);
   }
+  if (colorFilter) {
+    const color = colorFilter.toLowerCase();
+    products = products.filter(
+      (p) => p.title.toLowerCase().includes(color) || p.description.toLowerCase().includes(color),
+    );
+  }
 
   if (rankBy === "budgetBestRated") {
     const GOOD_RATING = minRating ?? 4;
     const wellRated = products.filter((p) => p.rating >= GOOD_RATING);
-    const pool = wellRated.length > 0 ? wellRated : products;
-    pool.sort((a, b) => a.price - b.price);
-    return { products: pool.slice(0, limit) };
+    wellRated.sort((a, b) => a.price - b.price);
+    return { products: wellRated.slice(0, limit) };
+  }
+
+  if (rankBy === "biggestDiscount") {
+    const discounted = products.filter((p) => p.discountPercentage > 0);
+    discounted.sort((a, b) => b.discountPercentage - a.discountPercentage);
+    return { products: discounted.slice(0, limit) };
+  }
+
+  if (rankBy === "discountedBestRated") {
+    const discounted = products.filter((p) => p.discountPercentage > 0);
+    discounted.sort((a, b) => b.rating - a.rating);
+    return { products: discounted.slice(0, limit) };
   }
 
   // Client-side sort guarantee — API sort isn't always reliable for category

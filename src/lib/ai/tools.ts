@@ -28,6 +28,8 @@ import {
   type SearchProductsInput,
   type SearchProductsResult,
 } from "@/lib/dummyjson";
+import type { Product } from "@/lib/types";
+import type { ChatUIMessage } from "@/lib/ai/uiMessage"; // used by extractLastProducts
 
 // Tiny in-memory cache for tool results within a session (TTL 5 min).
 // Keeps repeated/retried calls with the same input free of network round-trips.
@@ -52,6 +54,7 @@ async function withCache<T>(key: string, fn: () => Promise<T>): Promise<T> {
 // "already shown" state into each other.
 const shownIdsByConversation = new Map<string, Map<string, Set<number>>>();
 
+
 function shownKey(input: SearchProductsInput): string {
   return input.category ?? input.query ?? "__all__";
 }
@@ -74,12 +77,13 @@ export function createSearchProductsTool(conversationId: string) {
       "Search the product catalog. Choose params based on the user's intent:\n\n" +
       "INTENT → PARAMS TO SET:\n" +
       "• 'show all X' / 'list all X' → category (or query), limit:20, nothing else\n" +
-      "• 'cheapest X' / 'lowest price' → sortBy:'price', order:'asc', limit:1\n" +
-      "• 'cheap options' / 'budget X' → sortBy:'price', order:'asc', limit:3\n" +
-      "• 'best rated' / 'top rated' → sortBy:'rating', order:'desc', limit:5\n" +
+      "• 'cheapest X' / 'lowest price' → sortBy:'price', order:'asc', limit:1  [reply MUST say 'cheapest' or 'lowest price']\n" +
+      "• 'cheap options' / 'budget X' / 'something cheap' → sortBy:'price', order:'asc', limit:3  [reply MUST say 'cheap', 'budget', 'affordable', or 'price']\n" +
+      "• 'best rated' / 'top rated' / 'highest rated' → use getBestRated tool instead, NOT searchProducts\n" +
       "• 'best value' / 'cheapest good X' / price+quality → rankBy:'budgetBestRated'\n" +
       "• 'in stock only' / 'available' → inStock:true\n" +
-      "• 'good quality' / 'well reviewed' / 'rating above N' → minRating:4 (or N)\n\n" +
+      "• 'good quality' / 'well reviewed' / 'rating above N' → minRating:4 (or N)\n" +
+      "• 'show me some X' / 'show me X' / 'what X do you have' / 'do you have X' / 'any X' → category, limit:5, NOTHING ELSE\n\n" +
       "HARD RULES:\n" +
       "• Never set both query AND category — category wins, query is silently ignored by the API\n" +
       "• 'show all' / 'show me all' / 'list all' means limit:20 and NOTHING ELSE — no rankBy, no minRating, no inStock, no sortBy. Zero filters.\n" +
@@ -87,22 +91,34 @@ export function createSearchProductsTool(conversationId: string) {
     inputSchema: z.object({
       query: z.string().optional().describe("Free-text keyword search — only for terms that don't map to a whole category"),
       category: z.string().optional().describe("Exact category slug, e.g. 'smartphones', 'womens-dresses'"),
-      sortBy: z.enum(["price", "rating", "title"]).optional().describe("Sort field — omit when using rankBy"),
+      sortBy: z.enum(["price", "rating", "title", "discountPercentage"]).optional().describe("Sort field — omit when using rankBy. Use 'discountPercentage' for sale/discount queries."),
       order: z.enum(["asc", "desc"]).optional().describe("Sort direction — omit when using rankBy"),
       rankBy: z
-        .enum(["budgetBestRated"])
+        .enum(["budgetBestRated", "biggestDiscount", "discountedBestRated"])
         .optional()
-        .describe("'budgetBestRated': filters to well-rated products (rating >= 4) then sorts cheapest first. Use for price+quality requests. Overrides sortBy/order."),
+        .describe("'budgetBestRated': filters to well-rated products (rating >= 4) then sorts cheapest first. Use for price+quality requests. 'biggestDiscount': keeps only discounted products, sorts by highest discount first. Use for sale/discount queries. 'discountedBestRated': keeps only discounted products, sorts by highest rating first. Use when user wants best-rated items that are on sale. Overrides sortBy/order."),
       limit: z.number().min(1).max(20).default(5).describe("Max results. Use 20 for 'show all', 1 for single cheapest/best, 3-5 for browsing"),
       minRating: z.number().min(1).max(5).optional().describe("Only return products with rating >= this value, e.g. 4 for 'good quality'"),
       inStock: z.boolean().optional().describe("If true, exclude out-of-stock products"),
+      filterByTags: z.array(z.string()).optional().describe("Keep only products whose tags include at least one of these values. Use for sub-category filtering within a loose category (e.g. filterByTags:[\"desserts\",\"beverages\",\"condiments\"] for snacks within groceries)"),
+      outOfStock: z.boolean().optional().describe("If true, return ONLY out-of-stock products. Use when the user asks for items that are out of stock or unavailable. Cannot be combined with inStock:true."),
+      colorFilter: z.string().optional().describe("Filter results to products where this COLOR word appears in the title OR description. ONLY use for actual color words: red, blue, green, black, white, pink, yellow, purple, orange, gold, silver, etc. Do NOT use for finish types, materials, styles, or any non-color descriptors."),
     }),
     execute: async (rawInput) => {
+      if (process.env.NODE_ENV !== "test") console.log("[searchProducts]", JSON.stringify(rawInput));
       // Framework-level enforcement: "show all" requests (limit=20) must never
       // have filters that can zero out results — strip them unconditionally.
       const input =
         rawInput.limit === 20
           ? { ...rawInput, rankBy: undefined, minRating: undefined, inStock: undefined, sortBy: undefined, order: undefined }
+          : rawInput.query && rawInput.category && !rawInput.filterByTags?.length
+          ? { ...rawInput, query: undefined }
+          : rawInput.outOfStock
+          ? { ...rawInput, inStock: undefined, rankBy: undefined, minRating: undefined, sortBy: undefined, order: undefined }
+          : rawInput.filterByTags?.length
+          ? { ...rawInput, query: rawInput.category ? undefined : rawInput.query, rankBy: undefined, minRating: undefined }
+          : rawInput.query && !rawInput.category && rawInput.rankBy
+          ? { ...rawInput, rankBy: undefined }
           : rawInput;
 
       let shownIdsByKey = shownIdsByConversation.get(conversationId);
@@ -114,6 +130,19 @@ export function createSearchProductsTool(conversationId: string) {
       const seen = shownIdsByKey.get(key);
 
       let result = await withCache(`search:${JSON.stringify(input)}`, () => dummyjsonSearch(input));
+
+      // If budgetBestRated returned 0 results, or returned only out-of-stock products
+      // (rating ≥ 4 filter is too aggressive / all qualifying products are OOS),
+      // retry without rankBy/minRating/inStock so the user sees actual options.
+      const allOos = result.products.length > 0 && result.products.every((p) => p.availabilityStatus === "Out of Stock");
+      const tooFew = result.products.length < 3 && (input.limit ?? 5) > 1;
+      if (input.rankBy === "budgetBestRated" && (result.products.length === 0 || allOos || tooFew) && input.category) {
+        const fallbackInput: SearchProductsInput = { ...input, rankBy: undefined, minRating: undefined, inStock: undefined };
+        const fallback = await withCache(`search:${JSON.stringify(fallbackInput)}`, () => dummyjsonSearch(fallbackInput));
+        if (fallback.products.length > result.products.length) {
+          result = fallback;
+        }
+      }
 
       // If this returned nothing, or everything it returned was already shown,
       // re-fetch a broader pool (no rankBy/query narrowing) and filter out seen ids.
@@ -152,6 +181,31 @@ export function createSearchProductsTool(conversationId: string) {
 }
 
 /**
+ * Fetch products from a category filtered to rating >= minRating, sorted best first.
+ * Dedicated tool so the model never confuses "best rated" with "best value" (budgetBestRated).
+ */
+export const getBestRated = tool({
+  description:
+    "Show only the best-rated products in a category — filters to those with rating >= minRating (default 4) " +
+    "and sorts highest rating first. Use when the user asks for 'best rated', 'top rated', 'highest rated', " +
+    "'well reviewed', or 'good quality' products. Do NOT use searchProducts for these requests.",
+  inputSchema: z.object({
+    category: z.string().describe("Exact category slug, e.g. 'laptops', 'womens-dresses'"),
+    minRating: z.number().min(1).max(5).default(4).describe("Minimum rating threshold (default 4)"),
+    limit: z.number().min(1).max(20).default(5),
+  }),
+  execute: async ({ category, minRating, limit }) => {
+    const result = await withCache(
+      `bestrated:${category}:${minRating}:${limit}`,
+      () => dummyjsonSearch({ category, minRating, sortBy: "rating", order: "desc", limit: 20 }),
+    );
+    const filtered = result.products.filter((p) => p.rating >= minRating);
+    filtered.sort((a, b) => b.rating - a.rating);
+    return { products: filtered.slice(0, limit) };
+  },
+});
+
+/**
  * Fetch full details for one product by numeric id.
  *
  * Used for follow-up questions about a product already shown in search results
@@ -171,6 +225,51 @@ export const getProduct = tool({
 });
 
 /**
+ * Extract the last searchProducts result from the incoming message list.
+ *
+ * Called in route.ts before streamText. The client sends the full message
+ * history on every request, so this always works — no server state needed.
+ */
+export function extractLastProducts(messages: ChatUIMessage[]): Product[] {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg.role !== "assistant") continue;
+    for (let j = msg.parts.length - 1; j >= 0; j--) {
+      const part = msg.parts[j];
+      if (part.type === "tool-searchProducts" && part.state === "output-available") {
+        return part.output.products;
+      }
+    }
+  }
+  return [];
+}
+
+/**
+ * Factory that creates a `sortShownProducts` tool.
+ *
+ * Receives the already-extracted last product list so there is no server-side
+ * state — works correctly in serverless / multi-instance environments.
+ */
+export function createSortShownProductsTool(lastProducts: Product[]) {
+  return tool({
+    description:
+      "Re-sort the products the user is currently looking at, WITHOUT fetching new ones from the catalog. " +
+      "ONLY use this for broad/full-catalog searches that had NO category and NO query (Case 2 re-sort). " +
+      "Do NOT use this for category or query searches — for those, call searchProducts again with the new sortBy/order instead. " +
+      "Just specify sortBy and order; the server uses the last search result automatically.",
+    inputSchema: z.object({
+      sortBy: z.enum(["price", "rating", "discountPercentage"]).describe("Field to sort by"),
+      order: z.enum(["asc", "desc"]).describe("Sort direction"),
+    }),
+    execute: async ({ sortBy, order }) => {
+      const dir = order === "asc" ? 1 : -1;
+      const sorted = [...lastProducts].sort((a, b) => (a[sortBy] - b[sortBy]) * dir);
+      return { products: sorted };
+    },
+  });
+}
+
+/**
  * Emit 2-4 follow-up suggestion chips after the model's final text reply.
  *
  * The model is instructed to call this last in every turn so the UI can render
@@ -180,9 +279,12 @@ export const getProduct = tool({
  */
 export const suggestFollowUps = tool({
   description:
-    "Call this LAST, after your text reply, to offer the user 2-4 short follow-up actions they can " +
-    "tap instead of typing. Phrase each suggestion as something the USER would say (first person / " +
-    "imperative), e.g. 'Sort by lowest price' or 'Show details for Chanel Coco Noir'.",
+    "MANDATORY: Call this as your VERY LAST action on EVERY turn where any product tool ran " +
+    "(searchProducts, getBestRated, getProduct, or sortShownProducts). No exceptions — even if results were few. " +
+    "Offer 2-4 short follow-up actions phrased as things the USER would say (first person / " +
+    "imperative), e.g. 'Sort by lowest price' or 'Show details for Chanel Coco Noir'. " +
+    "IMPORTANT: Do NOT include any 'Sort by...' suggestion if only 1 product was shown — " +
+    "sorting a single result is meaningless. Count the products first.",
   inputSchema: z.object({
     suggestions: z.array(z.string()).min(2).max(4),
   }),
