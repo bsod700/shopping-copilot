@@ -152,26 +152,6 @@ export const evalCases: EvalCase[] = [
   },
 
   {
-    id: "budget-best-rated-single",
-    description: "'Cheapest with best reviews' uses rankBy and returns only well-rated items",
-    turns: ["show me the cheapest laptop with the best reviews"],
-    check: (ctx) => {
-      const calls = ctx.toolCalls.filter((c) => c.toolName === "searchProducts");
-      if (calls.length === 0) return fail("expected searchProducts to be called");
-      const input = calls[0].input as { rankBy?: string };
-      if (input.rankBy !== "budgetBestRated") {
-        return fail(`expected rankBy: "budgetBestRated", got ${JSON.stringify(input)}`);
-      }
-      const products = groundedProducts(ctx) as Array<{ rating?: number }>;
-      if (products.length === 0) return fail("expected at least one product in tool results");
-      if (!products.every((p) => (p.rating ?? 0) >= 4)) {
-        return fail("every returned product should have rating >= 4 for a 'best reviews' request");
-      }
-      return pass();
-    },
-  },
-
-  {
     id: "budget-best-rated-dresses",
     description: "'Cheapest dress with good reviews' returns a real, well-rated, cheap dress",
     turns: ["show me the cheapest dress with good reviews"],

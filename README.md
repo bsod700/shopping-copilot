@@ -30,15 +30,27 @@ npm run dev
 
 **Chosen: Vercel AI SDK v6**
 
-I picked the Vercel AI SDK because it solves exactly the hard parts of this project — streaming UI, structured tool calls, human-in-the-loop approval, typed message parts — without adding orchestration overhead I don't need. The SDK's `useChat` hook on the client and `streamText` on the server handle the full request lifecycle. `InferUITools` gives type-safe tool output shapes so TypeScript catches mismatches at compile time. The `needsApproval: true` flag on add-to-cart and checkout gates those actions behind a UI confirm dialog with no extra wiring.
+I chose the Vercel AI SDK because it gives me exactly what I need without making things complicated. It handles streaming the text to the screen smoothly and makes sure the data formats is correct so I do not get random errors. It also has a great built in feature that pauses the AI to ask the user for permission before doing sensitive actions like checking out or add item to cart. The tools it provides like useChat for the front end and streamText for the back end connect everything easily.
 
 **Rejected: LangChain**
 
-LangChain's value is chaining multiple steps, agents reasoning over tools in a loop, and connecting many data sources through standardized abstractions. None of that applies here: this is a single-model, single-thread, single-catalog app where every product query is one API call. LangChain would add 3-4 abstraction layers (chains, loaders, vectorstores, memory) to something that needs none of them. Its streaming story also requires bridging between LangChain's event system and a React hook — the AI SDK handles that natively. The weight of LangChain is a liability, not an asset, for this scope.
+LangChain is a great tool if you need many AI agents talking to each other or if you need to search through huge databases. But this project is very focused. We only have one model talking to one specific API. Using LangChain here would force me to add layers of complex code that I just do not need. Also making LangChain work nicely with React takes extra effort while the Vercel SDK does it out of the box.
 
 **Rejected: Mastra**
 
-Mastra is a full agent framework with its own server runtime, workflow definitions, a built-in memory system, and deployment primitives. That's the right tool for a production multi-agent pipeline, but it would mean configuring a new runtime just to run a single conversation loop. The setup overhead (Mastra config, workflow definitions, running the Mastra server alongside Next.js) would have consumed most of the available time. I also wanted to own the persistence layer explicitly — so I could explain exactly where conversations live and why — rather than delegating it to Mastra's managed memory abstraction.
+Mastra is a massive framework built for big company projects. It requires running a completely separate server and setting up complex rules just to get started. Setting all of that up would take too much time for a focused chat application. Another big reason I avoided it is memory management. Mastra saves conversations automatically behind the scenes. I wanted to build and control the database part myself so I can explain exactly where the data lives and how it works.
+
+**Rejected: assistant-ui**
+
+This library is mostly just for the front end user interface. While it is good for customizing how a chat looks, it does not handle the back end connection to the AI model on its own. If I used it, I would still need another tool for the back end. The Vercel SDK already handles both the front end and the back end together perfectly, so adding assistant-ui would just mean doing extra work for no reason.
+
+**Rejected: CopilotKit**
+
+CopilotKit is a huge toolkit designed to add AI into massive existing applications. It has a complex system for managing memory automatically. But in this project, the only memory we have is just saving the chat messages. Using a huge tool like CopilotKit just to save a simple chat history is overkill. I built the database part myself so I can explain exactly how the conversation is saved.
+
+**Rejected: LibreChat**
+
+LibreChat is not just a tool to help you write code; it is a full chat application that is already built, like a private ChatGPT. To use it, you have to install heavy databases like MongoDB and run a big server. The goal of this assignment was to build a custom minimal shopping app from scratch. Using LibreChat would mean spending all my time trying to change a massive existing product instead of writing my own simple code.
 
 ---
 
