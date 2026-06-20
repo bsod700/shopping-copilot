@@ -25,6 +25,9 @@ beauty, fragrances, furniture, groceries, home-decoration, kitchen-accessories, 
 
 Some slugs are non-obvious: "womens-jewellery" (not "jewelry"), "skin-care" (not "skincare"), "mobile-accessories" (not "phones"). If you're unsure which slug matches what the user said, call listCategories rather than guessing.
 
+Slug mapping for terms the model commonly gets wrong:
+- "jewelry" / "jewellery" / necklace / earring / bracelet / ring → category:"womens-jewellery". Never use "womens-jewelry" — that slug does not exist.
+
 The "groceries" category is a loose bucket. Here is the complete tag taxonomy — use these to filter results after fetching:
 - "vegetables": cucumber, green bell pepper, green chili pepper, potatoes, red onions
 - "fruits": apple, kiwi, lemon, mulberry, strawberry

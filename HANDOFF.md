@@ -1,66 +1,59 @@
 # Handoff
 
-## Session: Responsive layout, UX fixes, welcome state (2026-06-16)
+## Session: Tests, README evaluation section, npm scripts (2026-06-20)
 
 ### What was done
 
-#### Bug: "No matching products" for "show me all men's shirts"
-AI was calling `searchProducts({ category: "mens-shirts", minRating: 4 })` which
-eliminated all 5 shirts (none have rating >= 4). Fixed with two layers:
-- **[src/lib/ai/systemPrompt.ts](src/lib/ai/systemPrompt.ts)** - added `SHOW ALL RULE`:
-  when user says "show all"/"show me all"/"list all", call searchProducts with ONLY
-  category + limit:20. No minRating, no inStock, no rankBy, no sortBy. Do not mention
-  filtering, do not suggest "without filters".
-- **[src/lib/ai/tools.ts](src/lib/ai/tools.ts)** - framework-level enforcement in `execute()`:
-  when `limit === 20`, strip rankBy/minRating/inStock/sortBy/order unconditionally,
-  regardless of what the LLM passed.
+#### Bug fix: Duplicate AI response text in MessageBubble
+The Vercel AI SDK emits a blank `""` text part at the start of each new step. The previous dedup filter was finding that blank as the "previous text" and letting the real text through twice.
+- **[src/components/chat/MessageBubble.tsx](src/components/chat/MessageBubble.tsx)** line 76 — changed `findLast((p) => p.type === "text")` to `findLast((p) => p.type === "text" && p.text.trim().length > 0)` so blank parts are skipped when comparing.
 
-#### Bug: Duplicate AI response text
-Vercel AI SDK re-emits the same text part in a new step after each tool call, causing
-the same paragraph to render twice.
-- **[src/components/chat/MessageBubble.tsx](src/components/chat/MessageBubble.tsx)** -
-  deduplicate consecutive identical text parts in the `.filter()` before `.map()`.
+#### Bug fix: `budgetBestRated` returning empty results
+When no products cleared the rating threshold the function returned an empty slice. Fixed with a fallback to the full pool.
+- **[src/lib/dummyjson.ts](src/lib/dummyjson.ts)** lines 181-184 — introduced `pool` variable: `const pool = wellRated.length > 0 ? wellRated : products;`
 
-#### Bug: "Show all men's shirts without filters" suggestion
-AI was suggesting this because it knew it had applied a filter. Covered by the
-`SHOW ALL RULE` in systemPrompt.ts above.
+#### New: persistence unit tests (12 tests, all pass)
+- **[tests/unit/persistence.test.ts](tests/unit/persistence.test.ts)** — new file. Uses `vi.mock("@/lib/db")` with an async factory that creates a `PrismaBetterSqlite3({ url: ":memory:" })` in-memory database and applies the schema via `$executeRawUnsafe` before any test runs. No real `dev.db` touched, no env vars needed. Covers: save/load round-trip, delete-then-recreate transaction, createdAt injection into metadata, parts JSON serialization, chronological ordering, `findOrCreateEmptyConversation` reuse logic (4 cases), cascade delete, `listConversations` order.
 
-#### Chat content width: 768px -> 991px
-- **[src/components/chat/MessageList.tsx](src/components/chat/MessageList.tsx)** - `max-w-3xl` -> `max-w-[991px]`
-- **[src/components/chat/ChatWindow.tsx](src/components/chat/ChatWindow.tsx)** - input wrapper same change
-- **[src/components/chat/ProductCarousel.tsx](src/components/chat/ProductCarousel.tsx)** - carousel container same change
-- **[src/components/chat/MessageBubble.tsx](src/components/chat/MessageBubble.tsx)** - skeleton same change
+#### New: `test:unit` and `test:integration` npm scripts
+- **[package.json](package.json)** — added `"test:unit": "vitest run tests/unit"` and `"test:integration": "vitest run tests/integration"` so every test layer has an `npm run` command.
 
-#### Responsive layout fix
-Sidebar (256px) + content (991px) = 1247px total. Below 1300px the browser was
-zooming out the whole page instead of being responsive.
-- **[src/components/sidebar/ConversationSidebar.tsx](src/components/sidebar/ConversationSidebar.tsx)** -
-  sidebar `aside` changed from `sm:block` to `min-[1300px]:block`. Hamburger drawer
-  trigger changed from `sm:hidden` to `min-[1300px]:hidden`.
-- Result: below 1300px the sidebar collapses to a drawer (hamburger top-left),
-  content fills full width. At 1300px+ sidebar is persistent alongside 991px content.
+Full scripts section:
+```json
+"test": "vitest run",
+"test:unit": "vitest run tests/unit",
+"test:integration": "vitest run tests/integration",
+"test:watch": "vitest",
+"test:e2e": "playwright test",
+"eval": "tsx --env-file=.env tests/evals/run-evals.ts"
+```
 
-#### Welcome empty state
-- **[src/components/chat/ChatWindow.tsx](src/components/chat/ChatWindow.tsx)** - replaced blank
-  `<div className="h-full">` with a centered welcome section: shopping bag emoji,
-  "Hey, I'm your shopping assistant!" heading, and a short subtitle with emojis.
+#### README: Evaluation section completely rewritten
+Old section described tests that didn't exist. New section is based entirely on the actual test files:
+- "How to run" — markdown table where every row is an `npm run` command
+- "What the test suite covers" — 4 accurate layers (dummyjson unit, persistence unit, integration, E2E, eval)
+- "What regressions these catch" — expanded to include persistence regressions
+- "What would slip through" — honestly names the chat route as untested, removes items now covered by persistence tests
 
-#### Starter prompts: icons + spacing + new first prompt
-- **[src/lib/starterPrompts.ts](src/lib/starterPrompts.ts)** - replaced "What's trending in
-  fragrances?" with "What's popular right now?"
-- **[src/components/chat/StarterPrompts.tsx](src/components/chat/StarterPrompts.tsx)** - added
-  lucide icons as prefix (TrendingUp, Laptop, Shirt, Glasses), increased gap from 2 to 3,
-  taller buttons (min-h-12), rounded-2xl corners.
+### Test suite state
+- 29/29 unit + integration tests passing (`npm test`)
+- E2E: 3 Playwright tests, require `.env` + OpenAI key, auto-start dev server
+- Eval: 28 cases, 1 flaky (`follow-up-suggestions` — pre-existing, model occasionally skips `suggestFollowUps`)
 
 ### Verified
-All changes tested in preview at 1000px and 1400px. Shirts show correctly. Welcome
-state renders on new conversation. Starter prompts show icons and spacing.
+- `npm run test:unit` — 17 tests pass
+- `npm run test:integration` — 12 tests pass (persistence) + integration test
+- README Evaluation section matches actual code
 
 ### Not done / still pending
 - Clean up test-artifact conversations in `dev.db` from browser verification sessions.
-- Flaky eval: `follow-up-suggestions` intermittently fails (pre-existing, not caused
-  here - model occasionally skips `suggestFollowUps` after a `budgetBestRated` search).
+- Flaky eval: `follow-up-suggestions` intermittently fails (pre-existing, not caused here).
+- README: final pass to check every claim against actual code (scheduled for Day 7).
 
-### Previous session context
-See git log for the dress filtering fix (2026-06-15) which introduced
-`createSearchProductsTool(conversationId)` factory and per-conversation shown-IDs tracking.
+### Previous session context (2026-06-16)
+- Bug: "No matching products" for "show me all men's shirts" — fixed with `SHOW ALL RULE` in systemPrompt.ts + framework-level enforcement in tools.ts when `limit === 20`.
+- Duplicate AI response text bug — fixed in MessageBubble.tsx (carried forward, refined this session).
+- Chat content width: 768px → 991px across MessageList, ChatWindow, ProductCarousel, MessageBubble.
+- Responsive layout: sidebar collapses to drawer below 1300px.
+- Welcome empty state added to ChatWindow.
+- Starter prompts: icons added, spacing improved, first prompt replaced.

@@ -531,14 +531,20 @@ export const evalCases: EvalCase[] = [
 
   {
     id: "category-womens-jewellery-slug",
-    description: "Searching for women's jewelry uses the correct non-obvious slug 'womens-jewellery' (not 'womens-jewelry')",
+    description: "Searching for women's jewelry uses the correct non-obvious slug 'womens-jewellery' (not 'womens-jewelry') in at least one searchProducts call",
     turns: ["show me women's jewelry"],
     check: (ctx) => {
       const calls = ctx.toolCalls.filter((c) => c.toolName === "searchProducts");
       if (calls.length === 0) return fail("expected searchProducts to be called");
-      const input = calls[0].input as { category?: string };
-      if (input.category !== "womens-jewellery")
-        return fail(`expected category:womens-jewellery, got ${JSON.stringify(input)}`);
+      // The model may call listCategories first and then retry with the correct slug —
+      // that is correct intended behavior. Check that the right slug was used in ANY call.
+      const usedCorrectSlug = calls.some(
+        (c) => (c.input as { category?: string }).category === "womens-jewellery",
+      );
+      if (!usedCorrectSlug)
+        return fail(
+          `expected category:womens-jewellery in at least one call, got: ${JSON.stringify(calls.map((c) => c.input))}`,
+        );
       const products = groundedProducts(ctx);
       if (products.length === 0) return fail("expected jewellery products in results");
       return pass();

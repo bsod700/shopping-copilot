@@ -19,7 +19,15 @@
  * runaway loops while allowing enough depth for multi-tool multi-intent queries.
  */
 import { openai } from "@ai-sdk/openai";
-import { convertToModelMessages, generateId, generateText, streamText, stepCountIs } from "ai";
+import {
+  convertToModelMessages,
+  createUIMessageStream,
+  createUIMessageStreamResponse,
+  generateId,
+  generateText,
+  streamText,
+  stepCountIs,
+} from "ai";
 import type { ModelMessage, ToolResultPart } from "ai";
 import {
   createSearchProductsTool,
@@ -115,10 +123,26 @@ export async function POST(req: Request) {
       },
     });
 
-    return result.toUIMessageStreamResponse<ChatUIMessage>({
-      originalMessages: messages,
-      generateMessageId: generateId,
-      onFinish: async ({ messages: finalMessages }) => {
+    // Capture final messages from the AI stream so persistence runs inside
+    // the controlled stream — if saving fails we can still write an error part
+    // back to the client before the stream closes.
+    const { promise: finalMessagesPromise, resolve: resolveFinalMessages } =
+      Promise.withResolvers<ChatUIMessage[]>();
+
+    const uiStream = createUIMessageStream({
+      execute: async ({ writer }) => {
+        writer.merge(
+          result.toUIMessageStream({
+            originalMessages: messages,
+            generateMessageId: generateId,
+            onFinish: ({ messages: finalMessages }) => {
+              resolveFinalMessages(finalMessages as ChatUIMessage[]);
+            },
+          }),
+        );
+
+        const finalMessages = await finalMessagesPromise;
+
         try {
           const messagesToSave = finalMessages.filter((m) => m.id);
           await saveMessages(conversationId, messagesToSave);
@@ -141,9 +165,15 @@ export async function POST(req: Request) {
           }
         } catch (err) {
           console.error("Persistence error:", err);
+          writer.write({
+            type: "error",
+            errorText: "Your conversation couldn't be saved. This message will be lost on refresh.",
+          });
         }
       },
     });
+
+    return createUIMessageStreamResponse({ stream: uiStream });
   } catch (err) {
     console.error("Chat error:", err);
     return Response.json(

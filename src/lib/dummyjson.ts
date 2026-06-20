@@ -179,8 +179,9 @@ export async function searchProducts({
   if (rankBy === "budgetBestRated") {
     const GOOD_RATING = minRating ?? 4;
     const wellRated = products.filter((p) => p.rating >= GOOD_RATING);
-    wellRated.sort((a, b) => a.price - b.price);
-    return { products: wellRated.slice(0, limit) };
+    const pool = wellRated.length > 0 ? wellRated : products;
+    pool.sort((a, b) => a.price - b.price);
+    return { products: pool.slice(0, limit) };
   }
 
   if (rankBy === "biggestDiscount") {

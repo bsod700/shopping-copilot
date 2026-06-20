@@ -73,7 +73,7 @@ export function MessageBubble({
         // Drop duplicate adjacent text parts (AI SDK can emit the same text
         // in a new step after a tool call, producing a visual double-render).
         if (part.type !== "text") return true;
-        const prev = arr.slice(0, i).findLast((p) => p.type === "text");
+        const prev = arr.slice(0, i).findLast((p) => p.type === "text" && p.text.trim().length > 0);
         return !prev || prev.text !== part.text;
       }).map((part, i) => {
         switch (part.type) {

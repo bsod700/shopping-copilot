@@ -282,9 +282,13 @@ export const suggestFollowUps = tool({
     "MANDATORY: Call this as your VERY LAST action on EVERY turn where any product tool ran " +
     "(searchProducts, getBestRated, getProduct, or sortShownProducts). No exceptions — even if results were few. " +
     "Offer 2-4 short follow-up actions phrased as things the USER would say (first person / " +
-    "imperative), e.g. 'Sort by lowest price' or 'Show details for Chanel Coco Noir'. " +
-    "IMPORTANT: Do NOT include any 'Sort by...' suggestion if only 1 product was shown — " +
-    "sorting a single result is meaningless. Count the products first.\n\n" +
+    "imperative), e.g. 'Sort by lowest price' or 'Show details for Chanel Coco Noir'.\n\n" +
+    "SORT SUGGESTION RULE — count the products returned this turn BEFORE writing suggestions:\n" +
+    "- 2 or more products → sort suggestions are fine\n" +
+    "- Exactly 1 product → NO 'Sort by...' suggestion at all. Offer alternatives instead: " +
+    "'Show more [category]', 'Add [product name] to cart', 'Show details for [product name]'.\n" +
+    "BAD (1 result): suggestions: ['Sort by rating', 'Show more motorcycles'] — drop the sort suggestion.\n" +
+    "GOOD (1 result): suggestions: ['Show more motorcycles', 'Add [name] to cart']\n\n" +
     "Also call this (with NO product tool called that turn) when asking a clarifying question for a " +
     "purely vague/subjective query (e.g. 'show me something cool') — the suggestions become tappable " +
     "options for the user to pick the direction they meant, instead of the user having to type a reply.",
