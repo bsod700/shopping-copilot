@@ -134,6 +134,56 @@ describe("searchProducts rankBy=budgetBestRated", () => {
   });
 });
 
+describe("searchProducts maxPrice/minPrice filtering", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("excludes products above maxPrice and fetches the full pool (limit=0)", async () => {
+    mockFetchOnce({
+      products: [
+        { id: 1, title: "Budget Phone", price: 299, rating: 3.8, category: "smartphones", tags: [] },
+        { id: 2, title: "Mid Phone",    price: 499, rating: 4.1, category: "smartphones", tags: [] },
+        { id: 3, title: "Expensive",    price: 999, rating: 4.5, category: "smartphones", tags: [] },
+      ],
+    });
+
+    const result = await searchProducts({ category: "smartphones", maxPrice: 500, limit: 5 });
+
+    expect(result.products.map((p) => p.id)).toEqual([1, 2]);
+    expect(result.products.every((p) => p.price <= 500)).toBe(true);
+    expect(lastFetchUrl()).toContain("limit=0");
+  });
+
+  it("excludes products below minPrice", async () => {
+    mockFetchOnce({
+      products: [
+        { id: 1, title: "Cheap",  price: 99,  rating: 3.0, category: "smartphones", tags: [] },
+        { id: 2, title: "Mid",    price: 499, rating: 4.0, category: "smartphones", tags: [] },
+        { id: 3, title: "Pricey", price: 899, rating: 4.3, category: "smartphones", tags: [] },
+      ],
+    });
+
+    const result = await searchProducts({ category: "smartphones", minPrice: 400, limit: 5 });
+
+    expect(result.products.map((p) => p.id)).toEqual([2, 3]);
+    expect(result.products.every((p) => p.price >= 400)).toBe(true);
+  });
+
+  it("returns empty when no products are within the price range", async () => {
+    mockFetchOnce({
+      products: [
+        { id: 1, title: "Pricey A", price: 800, rating: 4.0, category: "smartphones", tags: [] },
+        { id: 2, title: "Pricey B", price: 900, rating: 4.5, category: "smartphones", tags: [] },
+      ],
+    });
+
+    const result = await searchProducts({ category: "smartphones", maxPrice: 500, limit: 5 });
+
+    expect(result.products).toHaveLength(0);
+  });
+});
+
 describe("searchProducts error handling", () => {
   afterEach(() => {
     vi.restoreAllMocks();

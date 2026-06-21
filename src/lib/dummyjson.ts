@@ -75,6 +75,10 @@ export interface SearchProductsInput {
   outOfStock?: boolean;
   /** Keep only products where this color word appears in the title OR description (case-insensitive). */
   colorFilter?: string;
+  /** Keep only products priced at or below this value. Applied client-side after fetching the full pool. */
+  maxPrice?: number;
+  /** Keep only products priced at or above this value. Applied client-side after fetching the full pool. */
+  minPrice?: number;
 }
 
 /** Result envelope returned by `searchProducts`. `error` is set on network/API failure. */
@@ -98,8 +102,8 @@ export interface SearchProductsResult {
  * Sorting is always applied client-side after fetching the full result pool, because
  * DummyJSON's server-side sort is unreliable on category endpoints.
  *
- * DummyJSON has no price-range filter (`minPrice`/`maxPrice`). "Cheap" queries are
- * approximated by `sortBy:"price", order:"asc"` — an intentional, documented trade-off.
+ * `minPrice`/`maxPrice` filtering is applied client-side after fetching the full pool,
+ * since DummyJSON has no price-range parameter.
  */
 export async function searchProducts({
   query,
@@ -113,6 +117,8 @@ export async function searchProducts({
   filterByTags,
   outOfStock,
   colorFilter,
+  maxPrice,
+  minPrice,
 }: SearchProductsInput): Promise<SearchProductsResult> {
   // Both a category and a query narrowing the same call: filter the category's
   // products by query afterwards (see below), so pull the full category pool here.
@@ -122,7 +128,7 @@ export async function searchProducts({
   // Pull the full pool whenever we need to rank, sort, or filter a category by
   // query — so the sort/rank/filter operates on every candidate, not just the
   // first N that happen to come back first.
-  params.set("limit", String(rankBy || bothSet || sortBy || filterByTags?.length || outOfStock ? 0 : limit));
+  params.set("limit", String(rankBy || bothSet || sortBy || filterByTags?.length || outOfStock || (maxPrice != null && maxPrice > 0) || (minPrice != null && minPrice > 0) ? 0 : limit));
   params.set("select", SELECT_FIELDS);
   if (sortBy && !rankBy) params.set("sortBy", sortBy);
   if (order && !rankBy) params.set("order", order);
@@ -174,6 +180,12 @@ export async function searchProducts({
     products = products.filter(
       (p) => p.title.toLowerCase().includes(color) || p.description.toLowerCase().includes(color),
     );
+  }
+  if (maxPrice != null && maxPrice > 0) {
+    products = products.filter((p) => p.price <= maxPrice);
+  }
+  if (minPrice != null && minPrice > 0) {
+    products = products.filter((p) => p.price >= minPrice);
   }
 
   if (rankBy === "budgetBestRated") {

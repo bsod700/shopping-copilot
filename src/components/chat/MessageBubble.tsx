@@ -70,11 +70,13 @@ export function MessageBubble({
     >
       <ThinkingSteps parts={message.parts} streaming={!!streaming} />
       {message.parts.filter((part, i, arr) => {
-        // Drop duplicate adjacent text parts (AI SDK can emit the same text
-        // in a new step after a tool call, producing a visual double-render).
-        if (part.type !== "text") return true;
-        const prev = arr.slice(0, i).findLast((p) => p.type === "text" && p.text.trim().length > 0);
-        return !prev || prev.text !== part.text;
+        // Only show the last non-empty text part. The AI SDK starts a new step
+        // after each tool call, and the model sometimes generates a slightly
+        // different paragraph in that step — showing both looks like a duplicate.
+        if (part.type !== "text" || part.text.trim().length === 0) return part.type !== "text";
+        const lastTextIndex = arr.reduce((last, p, j) =>
+          p.type === "text" && p.text.trim().length > 0 ? j : last, -1);
+        return i === lastTextIndex;
       }).map((part, i) => {
         switch (part.type) {
           // Rendered last, after the loop, regardless of generation order.

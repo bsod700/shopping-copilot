@@ -12,7 +12,8 @@
     "test:integration": "vitest run tests/integration",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "eval": "tsx --env-file=.env tests/evals/run-evals.ts"
+    "eval": "tsx --env-file=.env tests/evals/run-evals.ts",
+    "db:studio": "prisma studio"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.71",

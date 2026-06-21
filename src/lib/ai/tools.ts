@@ -81,6 +81,7 @@ export function createSearchProductsTool(conversationId: string) {
       "• 'cheap options' / 'budget X' / 'something cheap' → sortBy:'price', order:'asc', limit:3  [reply MUST say 'cheap', 'budget', 'affordable', or 'price']\n" +
       "• 'best rated' / 'top rated' / 'highest rated' → use getBestRated tool instead, NOT searchProducts\n" +
       "• 'best value' / 'cheapest good X' / price+quality → rankBy:'budgetBestRated'\n" +
+      "• 'under $X' / 'below $X' / 'less than $X' / 'max budget $X' → maxPrice:X  (combine with other params freely, e.g. maxPrice:500 + category:'smartphones')\n" +
       "• 'in stock only' / 'available' → inStock:true\n" +
       "• 'good quality' / 'well reviewed' / 'rating above N' → minRating:4 (or N)\n" +
       "• 'show me some X' / 'show me X' / 'what X do you have' / 'do you have X' / 'any X' → category, limit:5, NOTHING ELSE\n\n" +
@@ -103,6 +104,8 @@ export function createSearchProductsTool(conversationId: string) {
       filterByTags: z.array(z.string()).optional().describe("Keep only products whose tags include at least one of these values. Use for sub-category filtering within a loose category (e.g. filterByTags:[\"desserts\",\"beverages\",\"condiments\"] for snacks within groceries)"),
       outOfStock: z.boolean().optional().describe("If true, return ONLY out-of-stock products. Use when the user asks for items that are out of stock or unavailable. Cannot be combined with inStock:true."),
       colorFilter: z.string().optional().describe("Filter results to products where this COLOR word appears in the title OR description. ONLY use for actual color words: red, blue, green, black, white, pink, yellow, purple, orange, gold, silver, etc. Do NOT use for finish types, materials, styles, or any non-color descriptors."),
+      maxPrice: z.number().optional().describe("Only return products priced at or below this value. Use when the user says 'under $X', 'below $X', 'less than $X', or 'max budget $X'. Always fetches the full pool first, then filters client-side."),
+      minPrice: z.number().optional().describe("Only return products priced at or above this value."),
     }),
     execute: async (rawInput) => {
       if (process.env.NODE_ENV !== "test") console.log("[searchProducts]", JSON.stringify(rawInput));

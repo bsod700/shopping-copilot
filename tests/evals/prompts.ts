@@ -152,6 +152,25 @@ export const evalCases: EvalCase[] = [
   },
 
   {
+    id: "price-cap-smartphones",
+    description: "'Smartphones under $500' uses maxPrice:500 and returns only products at or below that price",
+    turns: ["show me smartphones under 500$"],
+    check: (ctx) => {
+      const calls = ctx.toolCalls.filter((c) => c.toolName === "searchProducts");
+      if (calls.length === 0) return fail("expected searchProducts to be called");
+      const hasMaxPrice = calls.some((c) => (c.input as { maxPrice?: number }).maxPrice === 500);
+      if (!hasMaxPrice)
+        return fail(`expected at least one searchProducts call with maxPrice:500, got: ${JSON.stringify(calls.map((c) => c.input))}`);
+      const products = groundedProducts(ctx) as Array<{ price: number; title: string }>;
+      if (products.length === 0) return fail("expected at least one product in tool results");
+      const overBudget = products.filter((p) => p.price > 500);
+      if (overBudget.length > 0)
+        return fail(`products above $500 in results: ${overBudget.map((p) => `${p.title} ($${p.price})`).join(", ")}`);
+      return pass();
+    },
+  },
+
+  {
     id: "budget-best-rated-dresses",
     description: "'Cheapest dress with good reviews' returns a real, well-rated, cheap dress",
     turns: ["show me the cheapest dress with good reviews"],
