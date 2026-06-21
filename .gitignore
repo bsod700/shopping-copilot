@@ -57,6 +57,7 @@ next-env.d.ts
 /DESIGN.md
 /nike/
 /screenshot-*.png
+/HANDOFF.md
 
 # claude code session metadata
 /.claude/
